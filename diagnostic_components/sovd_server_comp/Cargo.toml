@@ -1,0 +1,13 @@
+[package]
+name = "sovd_server_comp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+opensovd-core = { workspace = true }
+opensovd-server = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

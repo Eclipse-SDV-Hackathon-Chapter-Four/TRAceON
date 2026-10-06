@@ -1,0 +1,4 @@
+[submodule "open_source/opensovd-core"]
+	path = open_source/opensovd-core
+	url = https://github.com/novanirvana/opensovd-core
+	branch = feat/log-provider
