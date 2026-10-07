@@ -5,3 +5,4 @@
 [submodule "TRAceON-ThreadX"]
 	path = TRAceON-ThreadX
 	url = git@github.com:Eclipse-SDV-Hackathon-Chapter-Four/TRAceON-ThreadX.git
+	branch = main
