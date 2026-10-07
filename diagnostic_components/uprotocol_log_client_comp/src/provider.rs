@@ -12,8 +12,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use opensovd_core::{
-    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogResult,
-    LogSeverity,
+    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogSeverity,
 };
 
 use crate::client::LogServiceClient;
@@ -36,7 +35,7 @@ impl UProtocolLogProvider {
 impl LogProvider for UProtocolLogProvider {
     /// Translates the SOVD filter into a `LogQuery`, calls the ECU, and maps
     /// the response back to SOVD `LogEntry` values.
-    async fn entries(&self, filter: LogFilter) -> LogResult<Vec<LogEntry>> {
+    async fn entries(&self, filter: LogFilter) -> Result<Vec<LogEntry>, LogError> {
         let query = LogQuery {
             severity: filter
                 .severity
@@ -61,7 +60,7 @@ impl LogProvider for UProtocolLogProvider {
 
     /// Capture configuration is owned by the ECU; without a dedicated RPC the
     /// client cannot read it, so an empty configuration is reported.
-    async fn configuration(&self) -> LogResult<Vec<LogConfiguration>> {
+    async fn configuration(&self) -> Result<Vec<LogConfiguration>, LogError> {
         Ok(Vec::new())
     }
 
@@ -69,14 +68,14 @@ impl LogProvider for UProtocolLogProvider {
     async fn configure(
         &self,
         _configuration: Vec<LogConfiguration>,
-    ) -> LogResult<()> {
+    ) -> Result<(), LogError> {
         Err(LogError::InvalidRequest(
             "log configuration is not supported by the uProtocol log client".into(),
         ))
     }
 
     /// Resetting the ECU configuration is not exposed through `getLogs`.
-    async fn reset_configuration(&self) -> LogResult<()> {
+    async fn reset_configuration(&self) -> Result<(), LogError> {
         Err(LogError::InvalidRequest(
             "log configuration is not supported by the uProtocol log client".into(),
         ))

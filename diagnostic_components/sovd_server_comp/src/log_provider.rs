@@ -8,8 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use opensovd_core::{
-    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogResult,
-    LogSeverity,
+    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogSeverity,
 };
 use tokio::sync::RwLock;
 
@@ -80,51 +79,153 @@ impl DiagLogProvider {
 
         // Seed log entries covering all severity levels
         let now = Utc::now();
+        let t = |secs_ago: i64| now - chrono::Duration::seconds(secs_ago);
         state.entries = vec![
+            // ── Application lifecycle ──────────────────────────────
             LogEntry {
-                timestamp: now,
+                timestamp: t(60),
                 context: LogContext::Rfc5424 {
                     host: Some("diag-host".into()),
-                    process: Some("sovd_server_comp".into()),
-                    pid: Some(1),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
                 },
                 severity: LogSeverity::Info,
-                msg: "sovd_server_comp started successfully".into(),
+                msg: "diag-app initialised — SOVD topology registered".into(),
                 href: None,
             },
             LogEntry {
-                timestamp: now,
+                timestamp: t(58),
+                context: LogContext::Rfc5424 {
+                    host: Some("diag-host".into()),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
+                },
+                severity: LogSeverity::Info,
+                msg: "SOVD server listening on 127.0.0.1:8080".into(),
+                href: None,
+            },
+            // ── SOVD session events ────────────────────────────────
+            LogEntry {
+                timestamp: t(50),
                 context: LogContext::AutosarDlt {
                     session: Some("DIAG".into()),
                     session_id: Some("0x01".into()),
                     application_id: Some("SOVD".into()),
-                    context_id: Some("MAIN".into()),
-                    message_id: Some("0x0001".into()),
+                    context_id: Some("SESS".into()),
+                    message_id: Some("0x0010".into()),
+                },
+                severity: LogSeverity::Info,
+                msg: "SOVD diagnostic session opened by client 192.168.1.10".into(),
+                href: None,
+            },
+            LogEntry {
+                timestamp: t(45),
+                context: LogContext::AutosarDlt {
+                    session: Some("DIAG".into()),
+                    session_id: Some("0x01".into()),
+                    application_id: Some("SOVD".into()),
+                    context_id: Some("SESS".into()),
+                    message_id: Some("0x0011".into()),
                 },
                 severity: LogSeverity::Debug,
-                msg: "DLT transport initialised".into(),
+                msg: "Security access granted — level 0x01".into(),
+                href: None,
+            },
+            // ── Diagnostic requests ────────────────────────────────
+            LogEntry {
+                timestamp: t(40),
+                context: LogContext::Rfc5424 {
+                    host: Some("diag-host".into()),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
+                },
+                severity: LogSeverity::Info,
+                msg: "GET /v1/apps/diag-app/logs/entries — 200 OK (4 entries)".into(),
                 href: None,
             },
             LogEntry {
-                timestamp: now,
+                timestamp: t(35),
                 context: LogContext::Rfc5424 {
                     host: Some("diag-host".into()),
-                    process: Some("sovd_server_comp".into()),
-                    pid: Some(1),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
+                },
+                severity: LogSeverity::Info,
+                msg: "PUT /v1/apps/diag-app/logs/config — severity threshold updated to Warn".into(),
+                href: None,
+            },
+            // ── Application warnings ───────────────────────────────
+            LogEntry {
+                timestamp: t(30),
+                context: LogContext::Rfc5424 {
+                    host: Some("diag-host".into()),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
                 },
                 severity: LogSeverity::Warn,
-                msg: "Retrying connection to ECU (attempt 1)".into(),
+                msg: "uProtocol transport not available — falling back to in-memory provider".into(),
                 href: None,
             },
+            LogEntry {
+                timestamp: t(25),
+                context: LogContext::AutosarDlt {
+                    session: Some("DIAG".into()),
+                    session_id: Some("0x01".into()),
+                    application_id: Some("SOVD".into()),
+                    context_id: Some("DATA".into()),
+                    message_id: Some("0x0020".into()),
+                },
+                severity: LogSeverity::Warn,
+                msg: "Data provider response time exceeded 200 ms threshold".into(),
+                href: None,
+            },
+            // ── Application errors ─────────────────────────────────
+            LogEntry {
+                timestamp: t(20),
+                context: LogContext::Rfc5424 {
+                    host: Some("diag-host".into()),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
+                },
+                severity: LogSeverity::Error,
+                msg: "ECU response timeout after 5 s — request aborted".into(),
+                href: None,
+            },
+            LogEntry {
+                timestamp: t(15),
+                context: LogContext::AutosarDlt {
+                    session: Some("DIAG".into()),
+                    session_id: Some("0x01".into()),
+                    application_id: Some("SOVD".into()),
+                    context_id: Some("FAULT".into()),
+                    message_id: Some("0x0030".into()),
+                },
+                severity: LogSeverity::Error,
+                msg: "DTC P0300 — random misfire detected, freeze frame captured".into(),
+                href: None,
+            },
+            // ── Fatal ──────────────────────────────────────────────
+            LogEntry {
+                timestamp: t(5),
+                context: LogContext::Rfc5424 {
+                    host: Some("diag-host".into()),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
+                },
+                severity: LogSeverity::Fatal,
+                msg: "Unrecoverable fault in brake controller — safe state activated".into(),
+                href: None,
+            },
+            // ── Recovery ──────────────────────────────────────────
             LogEntry {
                 timestamp: now,
                 context: LogContext::Rfc5424 {
                     host: Some("diag-host".into()),
-                    process: Some("sovd_server_comp".into()),
-                    pid: Some(1),
+                    process: Some("diag-app".into()),
+                    pid: Some(42),
                 },
-                severity: LogSeverity::Error,
-                msg: "ECU response timeout after 5 s".into(),
+                severity: LogSeverity::Info,
+                msg: "System recovery complete — diagnostic session resumed".into(),
                 href: None,
             },
         ];
@@ -155,7 +256,7 @@ impl LogProvider for DiagLogProvider {
     ///   (i.e. at least as severe — Fatal < Error < Warn < Info < Debug).
     /// - `created_after`: keep entries with `timestamp > created_after`.
     /// - `created_before`: keep entries with `timestamp < created_before`.
-    async fn entries(&self, filter: LogFilter) -> LogResult<Vec<LogEntry>> {
+    async fn entries(&self, filter: LogFilter) -> Result<Vec<LogEntry>, LogError> {
         let state = self.state.read().await;
 
         let result = state
@@ -187,7 +288,7 @@ impl LogProvider for DiagLogProvider {
     }
 
     /// Returns the current per-context severity configuration.
-    async fn configuration(&self) -> LogResult<Vec<LogConfiguration>> {
+    async fn configuration(&self) -> Result<Vec<LogConfiguration>, LogError> {
         Ok(self.state.read().await.config.clone())
     }
 
@@ -197,7 +298,7 @@ impl LogProvider for DiagLogProvider {
     async fn configure(
         &self,
         configuration: Vec<LogConfiguration>,
-    ) -> LogResult<()> {
+    ) -> Result<(), LogError> {
         if configuration.is_empty() {
             return Err(LogError::InvalidRequest(
                 "configuration list must not be empty".into(),
@@ -209,7 +310,7 @@ impl LogProvider for DiagLogProvider {
 
     /// Resets the per-context severity configuration to `Info` for all
     /// known contexts.
-    async fn reset_configuration(&self) -> LogResult<()> {
+    async fn reset_configuration(&self) -> Result<(), LogError> {
         let mut state = self.state.write().await;
         for cfg in &mut state.config {
             cfg.severity = LogSeverity::Info;
