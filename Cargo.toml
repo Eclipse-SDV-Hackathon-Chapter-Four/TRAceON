@@ -1,20 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
 # SPDX-License-Identifier: Apache-2.0
-
-# TRAceON Cargo workspace.
 #
-# Only the TRAceON-owned diagnostic components are workspace members. The
-# OpenSOVD crates live in the `open_source/opensovd-core` git submodule, which
-# is its own workspace; they are consumed here as path dependencies, not as
-# members, so the two workspaces do not collide.
+# This file was created with the assistance of generative AI.
+
+# TRAceON Cargo workspace. OpenSOVD remains a separate workspace in the
+# submodule and is consumed here through path dependencies.
 [workspace]
 members = [
     "diagnostic_components/sovd_server_comp",
     "diagnostic_components/uprotocol_log_client_comp",
     "diagnostic_components/dummy_diag_app",
 ]
-# The submodule is its own workspace; exclude it so its crates inherit from the
-# submodule's workspace root, not this one.
 exclude = ["open_source/opensovd-core"]
 resolver = "2"
 
@@ -23,20 +19,17 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-# OpenSOVD (git submodule, path dependencies)
 opensovd-core = { path = "open_source/opensovd-core/opensovd-core" }
 opensovd-server = { path = "open_source/opensovd-core/opensovd-server" }
-
-# TRAceON components
 uprotocol_log_client_comp = { path = "diagnostic_components/uprotocol_log_client_comp" }
 
-# Third-party
 async-trait = "0.1"
-# uProtocol Zenoh transport — real cross-process transport between the SOVD
-# server and the standalone dummy ECU. Pinned to the up-rust 0.9 line.
-up-transport-zenoh = "0.9"
+axum = { version = "0.8", default-features = false }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+futures = { version = "0.3", default-features = false }
+serde_json = { version = "1", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.7", default-features = false, features = ["fs", "cors"] }
+up-transport-zenoh = "0.9"
