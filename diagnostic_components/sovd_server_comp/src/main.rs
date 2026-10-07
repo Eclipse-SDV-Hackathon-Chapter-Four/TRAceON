@@ -28,16 +28,19 @@
 mod log_provider;
 mod uprotocol_source;
 
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
+use axum::{extract::State, http::StatusCode, routing::{get, post}, Json, Router};
 use opensovd_core::{App, Component, Topology};
 use opensovd_server::Server;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tracing::info;
 
 use crate::log_provider::DiagLogProvider;
+
+async fn serve_ui() -> axum::response::Html<&'static str> {
+    axum::response::Html(include_str!("../static/index.html"))
+}
 
 async fn ingest_log(
     State(provider): State<DiagLogProvider>,
@@ -69,7 +72,6 @@ async fn main() -> std::io::Result<()> {
     // ------------------------------------------------------------------
     let topology = Topology::new();
 
-    // Source B: REST sink + live SSE stream, exposed as app "hw-log".
     let sink_provider = DiagLogProvider::new();
     let sink = Router::new()
         .route("/logs", post(ingest_log))
@@ -79,9 +81,6 @@ async fn main() -> std::io::Result<()> {
         let mut t = topology.write().await;
 
         // ---- App "diag-app" on component "diag-ecu": uProtocol/Zenoh ECU ----
-        //
-        // Registered by default; set TRACEON_UPROTOCOL=off to skip it (useful
-        // when the dummy ECU process is not running).
         let uprotocol_enabled =
             std::env::var("TRACEON_UPROTOCOL").unwrap_or_default() != "off";
         if uprotocol_enabled {
@@ -113,24 +112,29 @@ async fn main() -> std::io::Result<()> {
     info!("Log sink available at POST /internal/logs");
 
     // ------------------------------------------------------------------
-    // 2. Bind the TCP listener
+    // 2. Spawn UI server on port 8081 (plain Axum, bypasses opensovd fallback)
     // ------------------------------------------------------------------
-    // Bind to loopback: this is a self-contained demo, not a production server.
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
-    info!("Binding on {}", listener.local_addr()?);
+    let ui_listener = TcpListener::bind("0.0.0.0:8082").await?;
+    info!("UI available at http://127.0.0.1:8082/");
+    let ui_router = Router::new()
+        .route("/", get(serve_ui))
+        .layer(CorsLayer::permissive());
+    tokio::spawn(async move {
+        axum::serve(ui_listener, ui_router).await.ok();
+    });
 
     // ------------------------------------------------------------------
-    // 3. Build and start the SOVD server
+    // 3. SOVD API server on port 8080
     // ------------------------------------------------------------------
-    let static_dir = std::env::var("SOVD_STATIC_DIR").unwrap_or_else(|_| "static".to_string());
+    let api_listener = TcpListener::bind("0.0.0.0:8080").await?;
+    info!("SOVD API at http://127.0.0.1:8080/sovd/v1/");
 
     Server::builder()
-        .listener(listener)
+        .listener(api_listener)
         .base_uri("http://127.0.0.1:8080/sovd")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))?
         .service("/internal", sink)
         .topology(topology)
-        .service("/ui", ServeDir::new(&static_dir))
         .layer(CorsLayer::permissive())
         .build()
         .map_err(|e| std::io::Error::other(e.to_string()))?

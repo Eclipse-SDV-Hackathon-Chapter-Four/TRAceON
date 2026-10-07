@@ -173,6 +173,14 @@
         <option value="debug">Debug</option>
       </select>
 
+      <label>After</label>
+      <input type="time" id="filter-after" step="1" />
+
+      <label>Before</label>
+      <input type="time" id="filter-before" step="1" />
+
+      <button class="secondary" id="btn-clear-time">✕ Clear</button>
+
       <label>Search</label>
       <input type="text" id="filter-text" placeholder="message…" style="width:160px" />
 
@@ -248,8 +256,8 @@
 </div>
 
 <script>
-  const BASE = '';  // same origin
-  const APP  = 'diag-app';
+  const BASE = 'http://172.26.10.72:8080/sovd';
+  const APP  = 'hw-log';
   const ENTRIES_URL = `${BASE}/v1/apps/${APP}/logs/entries`;
   const CONFIG_URL  = `${BASE}/v1/apps/${APP}/logs/config`;
 
@@ -263,8 +271,14 @@
 
   // ── Fetch log entries ──────────────────────────────────────────────
   async function fetchEntries() {
-    const sev = document.getElementById('filter-sev').value;
-    const url = sev ? `${ENTRIES_URL}?severity=${sev.toLowerCase()}` : ENTRIES_URL;
+    const sev   = document.getElementById('filter-sev').value;
+    const after  = document.getElementById('filter-after').value;
+    const before = document.getElementById('filter-before').value;
+    const params = new URLSearchParams();
+    if (sev)    params.set('severity',       sev.toLowerCase());
+    if (after)  params.set('created-after',  toISO(after));
+    if (before) params.set('created-before', toISO(before));
+    const url = params.size ? `${ENTRIES_URL}?${params}` : ENTRIES_URL;
     try {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -421,6 +435,13 @@
   });
   document.getElementById('btn-refresh').addEventListener('click', fetchEntries);
   document.getElementById('filter-sev').addEventListener('change', fetchEntries);
+  document.getElementById('btn-clear-time').addEventListener('click', () => {
+    document.getElementById('filter-after').value = '';
+    document.getElementById('filter-before').value = '';
+    fetchEntries();
+  });
+  document.getElementById('filter-after').addEventListener('change', fetchEntries);
+  document.getElementById('filter-before').addEventListener('change', fetchEntries);
   document.getElementById('filter-text').addEventListener('input', renderEntries);
 
   // ── Detail drawer ──────────────────────────────────────────────────
@@ -441,6 +462,13 @@
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
+  function toISO(timeStr) {
+    const d = new Date();
+    const [h, m, s] = timeStr.split(':');
+    d.setHours(+h, +m, +(s||0), 0);
+    return d.toISOString();
+  }
+
   function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
