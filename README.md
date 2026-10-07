@@ -1,111 +1,118 @@
 # TRAceON
 
-Centralized logging and trace collection for vehicle ECUs over SOVD (Service-Oriented Vehicle Diagnostics).
+> SOVD logs resource for OpenSOVD, fetched from the ECU over uProtocol/Zenoh.
 
-TRAceON demonstrates a logging and trace-retrieval use case for [OpenSOVD](https://github.com/eclipse-opensovd), letting a diagnostics engineer pull filtered logs from multiple ECUs through a single SOVD interface to speed up root-cause analysis.
+TRAceON implements the SOVD `logs` resource for [OpenSOVD](https://github.com/eclipse-opensovd),
+letting a diagnostics engineer pull filtered logs from vehicle ECUs through a single SOVD
+interface to speed up root-cause analysis.
 
 ![TRAceON architecture overview](docs/TRAceON.png)
 
 ## Problem Statement
 
-At present, OpenSOVD does not provide native logging support. When an ECU reports a severe or critical fault, there is no unified way to collect and inspect the relevant logs across the vehicle.
+OpenSOVD does not yet provide a native logging resource. When an ECU reports a fault there is
+no unified way to collect and inspect logs across the vehicle network.
 
-TRAceON solves this by implementing the logging use case end to end, with the goal of contributing it back to OpenSOVD once the implementation is mature. The solution aims to provide:
-
-- Centralized log access through SOVD.
-- Log filtering and querying.
-- Live synchronization of logs.
-- Continuous monitoring of ECU health.
-- Root-cause analysis for fault diagnostics.
-
-## Use Case
-
-A diagnostics engineer wants to understand the root cause of a fault reported by an ECU (for example, ECU1). The engineer uses the SOVD interface to request logs from vehicle ECUs and can apply filters to retrieve only the relevant information.
-
-This supports troubleshooting scenarios where an ECU reports severe or critical errors and detailed log analysis is required.
-
-### Actors
-
-- End User
-- Tester / Client
-- SOVD Server (running on the HPC)
-- Vehicle ECUs (ECU1, ECU2, ECU3)
-
-### Log Filtering Options
-
-The client can request logs using filters such as:
-
-- Timestamp
-- Context
-- Severity
-
-### Flow
-
-1. An end user initiates a diagnostic investigation.
-2. A tester/client sends a `GET(log_entries)` request to the SOVD Server.
-3. The request may include filtering parameters (timestamp, context, severity).
-4. The SOVD Server communicates with the relevant ECUs through the vehicle network using the vehicle protocol and REST APIs.
-5. Each ECU exposes its application logs.
-6. The SOVD Server aggregates the requested logs.
-7. The filtered log data is returned to the tester/client.
-8. The engineer analyzes the logs to determine the root cause of the reported fault.
+TRAceON fills that gap end-to-end with two complementary ingestion paths, with the goal of
+contributing the implementation back to OpenSOVD once it is mature.
 
 ## System Architecture
 
+TRAceON supports two log ingestion paths that can be selected at runtime.
+
+### Path 1 — ThreadX / MQTT hardware ingest (default mode)
+
+A hardware ECU running **ThreadX RTOS** publishes log events over **MQTT**. An MQTT receptor
+bridges those events into the SOVD server via a REST sink. The server buffers entries in memory
+and broadcasts them to any active SSE stream.
+
 ```text
-+------------+       GET(log_entries)        +----------------+
-| Tester /   | ---------------------------> |  SOVD Server   |
-| Client     |                              |    (HPC)       |
-+------------+ <--------------------------- +----------------+
-                    Filtered Logs
++------------------+   MQTT publish   +------------------+   POST /internal/logs
+|  ECU (ThreadX)   | ---------------> |  MQTT Receptor   | --------------------->+
++------------------+                  +------------------+                        |
+                                                                                   v
++------------+   GET /sovd/v1/apps/diag-app/logs/entries   +--------------------+
+| Tester /   | <------------------------------------------ |  sovd_server_comp  |
+| Client     |   GET /sovd/v1/apps/diag-app/logs/entries   |  DiagLogProvider   |
+|  (UI/curl) |        /stream  (SSE live stream)           |  (in-memory ring   |
++------------+ ----------------------------------------->  |   + broadcast)     |
+                                                            +--------------------+
+```
 
-                          |
-                          | Vehicle Protocol / REST API
-                          |
-        -------------------------------------------------
-        |                       |                       |
-        v                       v                       v
+### Path 2 — uProtocol / Zenoh RPC
 
-    +---------+            +---------+            +---------+
-    |  ECU1   |            |  ECU2   |            |  ECU3   |
-    +---------+            +---------+            +---------+
-    | App1    |            | App1    |            | App1    |
-    | App2    |            | App2    |            | App2    |
-    | AppN    |            | AppN    |            | AppN    |
-    | Logs    |            | Logs    |            | Logs    |
-    +---------+            +---------+            +---------+
+A standalone ECU stand-in (`dummy_diag_app`) exposes a `getLogs` / `getConfig` RPC service
+over **uProtocol** using a **Zenoh** TCP transport. The SOVD server connects to it and
+delegates every `GET /entries` request to the ECU via RPC.
+
+```text
++------------+   GET /sovd/v1/apps/diag-app/logs/entries   +--------------------+
+| Tester /   | -----------------------------------------> |  sovd_server_comp  |
+| Client     | <------------------------------------------ |  UProtocolLog-     |
++------------+           Filtered log entries              |  Provider          |
+                                                            +--------------------+
+                                                                     |
+                                                         uProtocol getLogs RPC
+                                                         UPAYLOAD_FORMAT_JSON
+                                                         (Zenoh TCP transport)
+                                                                     |
+                                                          +--------------------+
+                                                          |  dummy_diag_app    |
+                                                          |  (ECU stand-in)    |
+                                                          +--------------------+
 ```
 
 See [docs/TraceON_UseCase.md](docs/TraceON_UseCase.md) for the full use-case description.
-
-## Expected Benefits
-
-- Faster troubleshooting of vehicle faults.
-- Unified access to logs across multiple ECUs.
-- Reduced diagnostic effort.
-- Improved observability of distributed vehicle software.
-- Support for real-time monitoring and alerting.
-- Foundation for future trace and telemetry capabilities within OpenSOVD.
 
 ## Repository Structure
 
 ```text
 TRAceON/
 ├── diagnostic_components/
-│   └── sovd_server_comp/      # SOVD server component (Rust)
-├── docs/                      # Documentation and diagrams
+│   ├── sovd_server_comp/             # SOVD server — REST API, log sink, SSE stream, UI
+│   ├── uprotocol_log_client_comp/    # uProtocol RPC client library (getLogs/getConfig/…)
+│   └── dummy_diag_app/               # Standalone ECU stand-in — serves getLogs over Zenoh
+├── docs/
 │   ├── TRAceON.png
 │   └── TraceON_UseCase.md
 └── open_source/
-    └── opensovd-core/         # OpenSOVD core (submodule)
+    └── opensovd-core/                # OpenSOVD core (git submodule)
 ```
+
+## What Is Implemented
+
+- **SOVD logs REST API** — `GET /entries`, `GET /config`, `PUT /config`, `DELETE /config`
+  under `/sovd/v1/apps/{app-id}/logs/`.
+- **Live SSE stream** — `GET /entries/stream` pushes new entries in real time via
+  Server-Sent Events; backed by a `tokio::broadcast` channel fed by the hardware ingest sink.
+- **Hardware log ingest sink** — `POST /internal/logs` accepts JSON log events from an
+  MQTT receptor (ThreadX ECU → MQTT → receptor → REST sink → SOVD); entries are buffered
+  in a ring buffer (max 1024) and immediately broadcast to active SSE subscribers.
+- **Severity and time filters** — `?severity=`, `?created-after=`, `?created-before=`
+  query parameters on `GET /entries`.
+- **Per-context severity config** — `PUT /config` stores a threshold per context type
+  (RFC 5424 or AUTOSAR DLT); `entries()` and `stream()` both apply it server-side.
+- **uProtocol/Zenoh transport** — `getLogs`, `getConfig`, `configure`, `resetConfig` RPCs
+  carried as `UPAYLOAD_FORMAT_JSON` over a Zenoh TCP peer connection.
+- **Two-process uProtocol demo** — `sovd_server_comp` (HPC) + `dummy_diag_app` (ECU)
+  run as separate OS processes connected by Zenoh.
+- **Live log viewer UI** — served at `/ui/`; context-aware filtering, per-context severity
+  config panel, auto-refresh, SSE live mode.
+
+## Roadmap
+
+- Context-type filter on `GET /entries` (`?context-type=`).
+- Real DLT / journald log ingestion on the ECU side.
+- Continuous ECU health monitoring and alerting.
+- Multi-ECU topology (register one `App` per ECU in the SOVD topology).
+- OpenDUT integration for fleet deployment and test orchestration.
 
 ## Getting Started
 
 ### Prerequisites
 
 - [Rust toolchain](https://rustup.rs/) (stable)
-- Git (with submodule support)
+- Git with submodule support
 
 ### Clone
 
@@ -123,21 +130,89 @@ git submodule update --init --recursive
 ### Build
 
 ```bash
+# Build all three crates from the workspace root
 cargo build
 ```
 
+### Run — ThreadX/MQTT hardware ingest mode (default)
+
+The server starts with an empty ring buffer and waits for hardware events on
+`POST /internal/logs`. Seed entries are pre-loaded so the UI shows data immediately.
+
+```bash
+# Serves on 0.0.0.0:8080
+# UI:    http://localhost:8080/ui/
+# API:   http://localhost:8080/sovd/v1/apps/diag-app/logs/entries
+# Sink:  POST http://localhost:8080/internal/logs
+SOVD_STATIC_DIR=diagnostic_components/sovd_server_comp/static \
+  cargo run -p sovd_server_comp
+```
+
+Send a hardware log event to the sink:
+
+```bash
+curl -X POST http://localhost:8080/internal/logs \
+  -H 'Content-Type: application/json' \
+  -d '{"timestamp":"2026-01-01T00:00:00Z","severity":"error","msg":"brake fault","context":{"type":"AUTOSAR_DLT","application_id":"BRK","context_id":"FAULT"}}'
+```
+
+### Run — uProtocol/Zenoh two-process mode
+
+**Terminal 1 — ECU stand-in (listens on Zenoh TCP):**
+
+```bash
+APP_ZENOH_LISTEN=tcp/127.0.0.1:7447 cargo run -p dummy_diag_app
+```
+
+**Terminal 2 — SOVD server (connects to ECU over Zenoh):**
+
+```bash
+TRACEON_LOG_SOURCE=uprotocol \
+APP_ZENOH_CONNECT=tcp/127.0.0.1:7447 \
+SOVD_STATIC_DIR=diagnostic_components/sovd_server_comp/static \
+  cargo run -p sovd_server_comp
+```
+
+### Environment Variables
+
+| Variable | Component | Default | Description |
+|---|---|---|---|
+| `TRACEON_LOG_SOURCE` | `sovd_server_comp` | _(unset)_ | Set to `uprotocol` to fetch logs from the ECU over Zenoh; omit for ThreadX/MQTT REST sink mode |
+| `APP_ZENOH_CONNECT` | `sovd_server_comp` | `tcp/127.0.0.1:7447` | Zenoh TCP endpoint of the ECU to connect to |
+| `APP_ZENOH_LISTEN` | `dummy_diag_app` | `tcp/127.0.0.1:7447` | Zenoh TCP endpoint the ECU listens on |
+| `SOVD_STATIC_DIR` | `sovd_server_comp` | `static` | Path to the directory containing `index.html` for the log viewer UI |
+| `RUST_LOG` | both | `info` | Tracing log level (`trace`, `debug`, `info`, `warn`, `error`) |
+
+### API Base Path
+
+All SOVD endpoints are versioned under `/sovd/v1`:
+
+```
+GET    /sovd/v1/apps/diag-app/logs
+GET    /sovd/v1/apps/diag-app/logs/entries[?severity=warn&created-after=<iso8601>]
+GET    /sovd/v1/apps/diag-app/logs/entries/stream   (SSE live stream)
+GET    /sovd/v1/apps/diag-app/logs/config
+PUT    /sovd/v1/apps/diag-app/logs/config
+DELETE /sovd/v1/apps/diag-app/logs/config
+
+POST   /internal/logs   (hardware event ingest — ThreadX/MQTT receptor bridge)
+```
+
+The live log viewer UI is served at `http://localhost:8080/ui/`.
+
 ## Contributing
 
-This project is intended to be contributed back to the OpenSOVD project. Contributions are welcome. Please open an issue or pull request to discuss changes.
+This project is intended to be contributed back to OpenSOVD. Contributions are welcome —
+please open an issue or pull request to discuss changes.
 
 ## License
 
-See the repository for license details.
+Apache-2.0 — see [LICENSE](LICENSE).
 
-## Team member
+## Team
 
 | Name | Role |
-|------|-------------|
+|---|---|
 | Helge Gudmundsen | Developer |
 | Isabella Lanes Rocha | Developer |
 | Kavyasree Sankaranarayanan Nair | Developer |

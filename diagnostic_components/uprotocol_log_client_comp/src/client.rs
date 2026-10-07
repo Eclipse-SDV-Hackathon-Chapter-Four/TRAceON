@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
 // SPDX-License-Identifier: Apache-2.0
+/* Portions of this file were generated with AI assistance. */
 
 //! Thin uProtocol RPC client for the ECU `getLogs` method.
 //!
@@ -134,7 +135,7 @@ impl LogServiceClient {
     /// handling fails.
     pub async fn get_logs(&self, query: &LogQuery) -> Result<LogResponse, ClientError> {
         let body = serde_json::to_vec(query)?;
-        let payload = UPayload::new(body, UPayloadFormat::UPAYLOAD_FORMAT_RAW);
+        let payload = UPayload::new(body, UPayloadFormat::UPAYLOAD_FORMAT_JSON);
 
         let options = CallOptions::for_rpc_request(
             self.config.timeout_ms,
@@ -188,7 +189,7 @@ impl LogServiceClient {
     /// Returns a [`ClientError`] if encoding or invocation fails.
     pub async fn set_config(&self, config: &[WireLogConfig]) -> Result<(), ClientError> {
         let body = serde_json::to_vec(config)?;
-        let payload = UPayload::new(body, UPayloadFormat::UPAYLOAD_FORMAT_RAW);
+        let payload = UPayload::new(body, UPayloadFormat::UPAYLOAD_FORMAT_JSON);
 
         let options = CallOptions::for_rpc_request(
             self.config.timeout_ms,
