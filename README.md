@@ -111,7 +111,7 @@ TRAceON/
 
 ### Prerequisites
 
-- [Rust toolchain](https://rustup.rs/) (stable)
+- [Rust toolchain](https://rustup.rs/)
 - Git with submodule support
 
 ### Clone

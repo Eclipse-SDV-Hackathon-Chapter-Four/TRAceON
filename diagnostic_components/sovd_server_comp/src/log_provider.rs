@@ -299,38 +299,12 @@ impl LogProvider for DiagLogProvider {
             .entries
             .iter()
             .filter(|e| {
-                // severity filter from query param
-                if let Some(min_sev) = filter.severity {
-                    if !severity_at_least(e.severity, min_sev) {
-                        return false;
-                    }
+                // query-param filter (severity + time window)
+                if !matches_filter(e, &filter) {
+                    return false;
                 }
-                // context-based severity filter from stored config
-                if !state.config.is_empty() {
-                    let ctx_sev = state.config.iter().find_map(|cfg| {
-                        if context_matches(&cfg.context, &e.context) {
-                            Some(cfg.severity)
-                        } else {
-                            None
-                        }
-                    });
-                    if let Some(min_sev) = ctx_sev {
-                        if !severity_at_least(e.severity, min_sev) {
-                            return false;
-                        }
-                    }
-                }
-                if let Some(after) = filter.created_after {
-                    if e.timestamp <= after {
-                        return false;
-                    }
-                }
-                if let Some(before) = filter.created_before {
-                    if e.timestamp >= before {
-                        return false;
-                    }
-                }
-                true
+                // per-context severity filter from the stored configuration
+                config_allows(&state.config, e)
             })
             .cloned()
             .collect())
@@ -338,13 +312,20 @@ impl LogProvider for DiagLogProvider {
 
     async fn stream(&self, filter: LogFilter) -> Result<LogStream> {
         validate_filter(&filter)?;
+        // Snapshot the per-context configuration at subscription time and apply
+        // it to every streamed entry, mirroring `entries`. Without this the SSE
+        // stream would ignore the stored config and leak entries below the
+        // configured threshold. A client that changes the config should
+        // re-open the stream to pick up the new rules.
+        let config = { self.state.read().await.config.clone() };
         let receiver = self.events.subscribe();
         let stream = stream::unfold(receiver, move |mut receiver| {
             let filter = filter.clone();
+            let config = config.clone();
             async move {
                 loop {
                     match receiver.recv().await {
-                        Ok(entry) if matches_filter(&entry, &filter) => {
+                        Ok(entry) if matches_filter(&entry, &filter) && config_allows(&config, &entry) => {
                             return Some((Ok(entry), receiver));
                         }
                         Ok(_) => {}
@@ -434,6 +415,26 @@ fn matches_filter(entry: &LogEntry, filter: &LogFilter) -> bool {
 /// the SOVD severity ordering.
 fn severity_at_least(value: LogSeverity, threshold: LogSeverity) -> bool {
     severity_rank(value) <= severity_rank(threshold)
+}
+
+/// Applies the stored per-context log configuration to a single entry.
+///
+/// Finds the configuration rule whose context type matches the entry and keeps
+/// the entry only if its severity is at least the rule's threshold (ISO
+/// 17978-3 §7.21.4: "Only entries with equal or higher severity shall be
+/// logged"). Entries whose context has no matching rule are kept. An empty
+/// configuration keeps everything.
+fn config_allows(config: &[LogConfiguration], entry: &LogEntry) -> bool {
+    if config.is_empty() {
+        return true;
+    }
+    match config
+        .iter()
+        .find_map(|cfg| context_matches(&cfg.context, &entry.context).then_some(cfg.severity))
+    {
+        Some(min_sev) => severity_at_least(entry.severity, min_sev),
+        None => true,
+    }
 }
 
 fn severity_rank(severity: LogSeverity) -> u8 {

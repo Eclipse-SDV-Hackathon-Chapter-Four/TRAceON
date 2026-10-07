@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# SIL / OpenDUT orchestration: bring up the SOVD server and run the pytest
+# suite against it. Build an `opensovd` image from sovd_server_comp first, or
+# replace `image:` with your own build context.
+services:
+  opensovd:
+    image: traceon-sovd-server
+    ports:
+      - "8080:8080"
+    environment:
+      SOVD_STATIC_DIR: /app/static
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/sovd/v1/apps/diag-app/logs || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  pytest:
+    build: .
+    depends_on:
+      opensovd:
+        condition: service_healthy
+    environment:
+      TRACEON_BASE_URL: http://opensovd:8080
