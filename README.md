@@ -133,3 +133,13 @@ This project is intended to be contributed back to the OpenSOVD project. Contrib
 ## License
 
 See the repository for license details.
+
+## Team member
+
+Helge Gudmundsen
+Isabella Lanes Rocha
+Kavyasree Sankaranarayanan Nair 
+Marufa Binte Mostafa
+Matheus Abrahao
+Priyankkumar Bidya
+Himank Meattle
