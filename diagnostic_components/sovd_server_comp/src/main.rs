@@ -52,7 +52,7 @@ async fn main() -> std::io::Result<()> {
         let log_source = std::env::var("TRACEON_LOG_SOURCE").unwrap_or_default();
         let app = if log_source == "uprotocol" {
             info!("Log source: uProtocol getLogs RPC");
-            let provider = uprotocol_source::build_demo_provider()
+            let provider = uprotocol_source::build_provider()
                 .await
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             app.with_log_provider(provider)

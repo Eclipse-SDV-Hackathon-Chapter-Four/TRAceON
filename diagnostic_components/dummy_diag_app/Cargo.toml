@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "dummy_diag_app"
+version.workspace = true
+edition.workspace = true
+description = "Standalone dummy diagnostic app (ECU stand-in) that exposes the log service (getLogs/getConfig/configure/resetConfig) over uProtocol Zenoh transport, mirroring swc_dummy_log_provider."
+
+[lib]
+name = "dummy_diag_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dummy_diag_app"
+path = "src/main.rs"
+
+[dependencies]
+# Reuse the on-the-wire types shared with the SOVD-side adapter.
+uprotocol_log_client_comp = { workspace = true }
+up-rust = { version = "0.9", default-features = false, features = ["communication", "util"] }
+up-transport-zenoh = { workspace = true }
+async-trait = { workspace = true }
+serde_json = "1"
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
