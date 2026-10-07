@@ -12,6 +12,10 @@ use opensovd_core::{
 };
 use tokio::sync::RwLock;
 
+/// Result alias matching the `LogProvider` trait's associated result type.
+/// `opensovd_core`'s own `log::Result` is not publicly re-exported.
+type LogResult<T> = std::result::Result<T, LogError>;
+
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
@@ -154,7 +158,7 @@ impl LogProvider for DiagLogProvider {
     ///   (i.e. at least as severe — Fatal < Error < Warn < Info < Debug).
     /// - `created_after`: keep entries with `timestamp > created_after`.
     /// - `created_before`: keep entries with `timestamp < created_before`.
-    async fn entries(&self, filter: LogFilter) -> opensovd_core::log::Result<Vec<LogEntry>> {
+    async fn entries(&self, filter: LogFilter) -> LogResult<Vec<LogEntry>> {
         let state = self.state.read().await;
 
         let result = state
@@ -186,7 +190,7 @@ impl LogProvider for DiagLogProvider {
     }
 
     /// Returns the current per-context severity configuration.
-    async fn configuration(&self) -> opensovd_core::log::Result<Vec<LogConfiguration>> {
+    async fn configuration(&self) -> LogResult<Vec<LogConfiguration>> {
         Ok(self.state.read().await.config.clone())
     }
 
@@ -196,7 +200,7 @@ impl LogProvider for DiagLogProvider {
     async fn configure(
         &self,
         configuration: Vec<LogConfiguration>,
-    ) -> opensovd_core::log::Result<()> {
+    ) -> LogResult<()> {
         if configuration.is_empty() {
             return Err(LogError::InvalidRequest(
                 "configuration list must not be empty".into(),
@@ -208,7 +212,7 @@ impl LogProvider for DiagLogProvider {
 
     /// Resets the per-context severity configuration to `Info` for all
     /// known contexts.
-    async fn reset_configuration(&self) -> opensovd_core::log::Result<()> {
+    async fn reset_configuration(&self) -> LogResult<()> {
         let mut state = self.state.write().await;
         for cfg in &mut state.config {
             cfg.severity = LogSeverity::Info;

@@ -13,6 +13,7 @@
 //   DELETE /v1/apps/diag-app/logs/config — reset severity config
 
 mod log_provider;
+mod uprotocol_source;
 
 use opensovd_core::{App, Component, Topology};
 use opensovd_server::Server;
@@ -41,11 +42,24 @@ async fn main() -> std::io::Result<()> {
         // Physical component (ECU)
         t.add_component(Component::new("diag-ecu", "Diagnostic ECU"));
 
-        // Software app hosted on the ECU, carrying the log provider
-        let log_provider = DiagLogProvider::new();
-        let app = App::new("diag-app", "Diagnostic Application")
-            .with_component_id("diag-ecu")
-            .with_log_provider(log_provider);
+        // Software app hosted on the ECU, carrying the log provider.
+        //
+        // Source selection (env TRACEON_LOG_SOURCE):
+        //   "uprotocol" -> fetch logs from the ECU over the uProtocol getLogs RPC
+        //   anything else (default) -> in-memory seed data
+        let app = App::new("diag-app", "Diagnostic Application").with_component_id("diag-ecu");
+
+        let log_source = std::env::var("TRACEON_LOG_SOURCE").unwrap_or_default();
+        let app = if log_source == "uprotocol" {
+            info!("Log source: uProtocol getLogs RPC");
+            let provider = uprotocol_source::build_demo_provider()
+                .await
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            app.with_log_provider(provider)
+        } else {
+            info!("Log source: in-memory seed data");
+            app.with_log_provider(DiagLogProvider::new())
+        };
 
         t.add_app(app);
     }
