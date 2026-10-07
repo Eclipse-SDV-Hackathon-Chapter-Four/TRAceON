@@ -12,8 +12,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use opensovd_core::{
-    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogResult,
-    LogSeverity,
+    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogSeverity,
 };
 
 use crate::client::LogServiceClient;
@@ -36,7 +35,7 @@ impl UProtocolLogProvider {
 impl LogProvider for UProtocolLogProvider {
     /// Translates the SOVD filter into a `LogQuery`, calls the ECU, and maps
     /// the response back to SOVD `LogEntry` values.
-    async fn entries(&self, filter: LogFilter) -> LogResult<Vec<LogEntry>> {
+    async fn entries(&self, filter: LogFilter) -> Result<Vec<LogEntry>, LogError> {
         let query = LogQuery {
             severity: filter
                 .severity
@@ -61,7 +60,7 @@ impl LogProvider for UProtocolLogProvider {
 
     /// Reads the ECU's capture configuration over the `getConfig` RPC and maps
     /// each rule onto a SOVD `LogConfiguration` with an RFC 5424 context.
-    async fn configuration(&self) -> LogResult<Vec<LogConfiguration>> {
+    async fn configuration(&self) -> Result<Vec<LogConfiguration>, LogError> {
         let config = self
             .client
             .get_config()
@@ -78,11 +77,11 @@ impl LogProvider for UProtocolLogProvider {
     async fn configure(
         &self,
         configuration: Vec<LogConfiguration>,
-    ) -> LogResult<()> {
+    ) -> Result<(), LogError> {
         let wire: Vec<WireLogConfig> = configuration
             .into_iter()
             .map(sovd_config_to_wire)
-            .collect::<LogResult<_>>()?;
+            .collect::<Result<_, LogError>>()?;
 
         self.client
             .set_config(&wire)
@@ -92,7 +91,7 @@ impl LogProvider for UProtocolLogProvider {
 
     /// Restores the ECU's default capture configuration over the `resetConfig`
     /// RPC.
-    async fn reset_configuration(&self) -> LogResult<()> {
+    async fn reset_configuration(&self) -> Result<(), LogError> {
         self.client
             .reset_config()
             .await
@@ -161,7 +160,7 @@ fn wire_entry_to_sovd(entry: WireLogEntry) -> LogEntry {
 /// Only RFC 5424 contexts are representable on the wire (the ECU reports and
 /// accepts `host`/`process`); other context variants are rejected with
 /// `InvalidRequest`.
-fn sovd_config_to_wire(cfg: LogConfiguration) -> LogResult<WireLogConfig> {
+fn sovd_config_to_wire(cfg: LogConfiguration) -> Result<WireLogConfig, LogError> {
     match cfg.context {
         LogContext::Rfc5424 { host, process, .. } => Ok(WireLogConfig {
             severity: severity_to_wire(cfg.severity),

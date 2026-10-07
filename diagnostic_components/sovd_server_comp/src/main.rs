@@ -18,6 +18,8 @@ mod uprotocol_source;
 use opensovd_core::{App, Component, Topology};
 use opensovd_server::Server;
 use tokio::net::TcpListener;
+use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 use tracing::info;
 
 use crate::log_provider::DiagLogProvider;
@@ -75,9 +77,13 @@ async fn main() -> std::io::Result<()> {
     // ------------------------------------------------------------------
     // 3. Build and start the SOVD server
     // ------------------------------------------------------------------
+    let static_dir = std::env::var("SOVD_STATIC_DIR").unwrap_or_else(|_| "static".to_string());
+
     Server::builder()
         .listener(listener)
         .topology(topology)
+        .service("/ui", ServeDir::new(&static_dir))
+        .layer(CorsLayer::permissive())
         .build()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
         .serve()
