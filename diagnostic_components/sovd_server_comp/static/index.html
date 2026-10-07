@@ -166,11 +166,11 @@
       <label>Severity</label>
       <select id="filter-sev">
         <option value="">All</option>
-        <option value="Fatal">Fatal</option>
-        <option value="Error">Error</option>
-        <option value="Warn">Warn</option>
-        <option value="Info">Info</option>
-        <option value="Debug">Debug</option>
+        <option value="fatal">Fatal</option>
+        <option value="error">Error</option>
+        <option value="warn">Warn</option>
+        <option value="info">Info</option>
+        <option value="debug">Debug</option>
       </select>
 
       <label>Search</label>
@@ -211,29 +211,23 @@
     <h2>⚙ Log Configuration</h2>
 
     <div class="config-section">
-      <h3>Active Config</h3>
-      <div id="active-config">
-        <div style="color:var(--muted);font-size:12px">Loading…</div>
-      </div>
-    </div>
-
-    <div class="config-section">
-      <h3>Update Config</h3>
       <div class="config-form">
         <label>Context Type</label>
         <select id="cfg-ctx-type">
-          <option value="RFC5424">RFC5424</option>
+          <option value="RFC5424">RFC 5424</option>
           <option value="AUTOSAR_DLT">AUTOSAR DLT</option>
           <option value="Custom">Custom</option>
         </select>
 
+        <div id="active-config" style="padding:6px 0; font-size:12px; color:var(--muted)">Loading…</div>
+
         <label>Min Severity</label>
         <select id="cfg-severity">
-          <option value="Fatal">Fatal</option>
-          <option value="Error">Error</option>
-          <option value="Warn">Warn</option>
-          <option value="Info" selected>Info</option>
-          <option value="Debug">Debug</option>
+          <option value="fatal">Fatal</option>
+          <option value="error">Error</option>
+          <option value="warn">Warn</option>
+          <option value="info" selected>Info</option>
+          <option value="debug">Debug</option>
         </select>
 
         <div class="config-actions">
@@ -260,8 +254,10 @@
   const CONFIG_URL  = `${BASE}/v1/apps/${APP}/logs/config`;
 
   const SEV_ORDER = ['Fatal','Error','Warn','Info','Debug'];
+  const CTX_LABELS = { 'RFC5424': 'RFC 5424', 'AUTOSAR_DLT': 'AUTOSAR DLT' };
 
   let allEntries = [];
+  let allConfig  = [];   // full config list cached from last GET
   let refreshTimer = null;
 
   // ── Fetch log entries ──────────────────────────────────────────────
@@ -282,10 +278,12 @@
   }
 
   function renderEntries() {
-    const text = document.getElementById('filter-text').value.toLowerCase();
-    const rows = allEntries.filter(e =>
-      !text || (e.msg ?? '').toLowerCase().includes(text)
-    );
+    const text   = document.getElementById('filter-text').value.toLowerCase();
+    const ctxSel = document.getElementById('cfg-ctx-type').value;  // selected context type
+    const rows = allEntries.filter(e => {
+      if (e.context?.type !== ctxSel) return false;
+      return !text || (e.msg ?? '').toLowerCase().includes(text);
+    });
 
     const tbody = document.getElementById('log-body');
     const empty = document.getElementById('empty-state');
@@ -303,14 +301,17 @@
       const sev = e.severity ?? 'info';
       const sevUp = sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
       const ts  = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—';
-      const ctx = e.context?.type ?? e.context?.context_type ?? '—';
+      const ctx = CTX_LABELS[e.context?.type] ?? e.context?.type ?? '—';
       const host = e.context?.host ? ` · ${e.context.host}` : '';
       const proc = e.context?.process ? ` · ${e.context.process}` : '';
+      const appId = e.context?.application_id ? ` · ${e.context.application_id}` : '';
+      const ctxId = e.context?.context_id ? `/${e.context.context_id}` : '';
+      const ctxStr = e.context?.type === 'AUTOSAR_DLT' ? ctx + appId + ctxId : ctx + host + proc;
       const msg = escHtml(e.msg ?? JSON.stringify(e));
       return `<tr data-idx="${i}">
         <td class="sev sev-${sevUp.toUpperCase()}"><span class="sev-badge badge-${sevUp.toUpperCase()}">${sevUp}</span></td>
         <td class="ts">${ts}</td>
-        <td class="ctx">${escHtml(ctx + host + proc)}</td>
+        <td class="ctx">${escHtml(ctxStr)}</td>
         <td class="msg">${msg}</td>
       </tr>`;
     }).join('');
@@ -326,29 +327,26 @@
       const r = await fetch(CONFIG_URL);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
-      renderConfig(data);
+      allConfig = data.contexts ?? [];
+      renderActiveConfig();
     } catch {
-      document.getElementById('active-config').innerHTML =
-        '<div style="color:var(--muted);font-size:12px">Unavailable</div>';
+      document.getElementById('active-config').textContent = 'Unavailable';
     }
   }
 
-  function renderConfig(data) {
-    const items = data.contexts ?? data.items ?? [];
-    if (items.length === 0) {
-      document.getElementById('active-config').innerHTML =
-        '<div style="color:var(--muted);font-size:12px">No config items</div>';
+  function renderActiveConfig() {
+    const ctxSel = document.getElementById('cfg-ctx-type').value;
+    const item   = allConfig.find(c => c.context?.type === ctxSel);
+    const el     = document.getElementById('active-config');
+    if (!item) {
+      el.textContent = 'No config for this context';
       return;
     }
-    document.getElementById('active-config').innerHTML = items.map(item => {
-      const sev = item.severity ?? 'info';
-      const sevUp = sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
-      const ctx = item.context?.type ?? item.context?.context_type ?? '—';
-      return `<div class="sev-row">
-        <span class="sev-label" style="color:var(--muted);font-size:12px">${ctx}</span>
-        <span class="sev-badge badge-${sevUp.toUpperCase()}">${sevUp}</span>
-      </div>`;
-    }).join('');
+    const sev   = item.severity ?? 'info';
+    const sevUp = sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
+    el.innerHTML = `Current threshold: <span class="sev-badge badge-${sevUp.toUpperCase()}">${sevUp}</span>`;
+    // pre-select the severity dropdown to match current config
+    document.getElementById('cfg-severity').value = sev.toLowerCase();
   }
 
   // ── Apply config ───────────────────────────────────────────────────
@@ -358,8 +356,8 @@
 
     const body = {
       items: [{
-        context: { context_type: ctxType },
-        severity: sev
+        context: { type: ctxType },
+        severity: sev.toLowerCase()
       }]
     };
 
@@ -407,6 +405,11 @@
     if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   }
 
+  // also re-render when context type selector changes
+  document.getElementById('cfg-ctx-type').addEventListener('change', () => {
+    renderActiveConfig();
+    renderEntries();
+  });
   document.getElementById('auto-refresh').addEventListener('change', e => {
     e.target.checked ? startRefresh() : stopRefresh();
   });

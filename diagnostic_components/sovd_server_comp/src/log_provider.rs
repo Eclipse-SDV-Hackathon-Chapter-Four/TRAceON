@@ -244,6 +244,23 @@ impl Default for DiagLogProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Returns true if a config context matches a log entry context by type.
+fn context_matches(cfg: &LogContext, entry: &LogContext) -> bool {
+    matches!(
+        (cfg, entry),
+        (LogContext::Rfc5424 { .. }, LogContext::Rfc5424 { .. })
+            | (LogContext::AutosarDlt { .. }, LogContext::AutosarDlt { .. })
+    ) || matches!(
+        (cfg, entry),
+        (LogContext::Custom { context_type: a, .. }, LogContext::Custom { context_type: b, .. })
+        if a == b
+    )
+}
+
+// ---------------------------------------------------------------------------
 // LogProvider implementation
 // ---------------------------------------------------------------------------
 
@@ -263,10 +280,25 @@ impl LogProvider for DiagLogProvider {
             .entries
             .iter()
             .filter(|e| {
-                // severity filter: include entries at or more severe than the threshold
+                // severity filter from query param
                 if let Some(min_sev) = filter.severity {
                     if e.severity > min_sev {
                         return false;
+                    }
+                }
+                // context-based severity filter from stored config
+                if !state.config.is_empty() {
+                    let ctx_sev = state.config.iter().find_map(|cfg| {
+                        if context_matches(&cfg.context, &e.context) {
+                            Some(cfg.severity)
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(min_sev) = ctx_sev {
+                        if e.severity > min_sev {
+                            return false;
+                        }
                     }
                 }
                 if let Some(after) = filter.created_after {
@@ -292,7 +324,7 @@ impl LogProvider for DiagLogProvider {
         Ok(self.state.read().await.config.clone())
     }
 
-    /// Replaces the per-context severity configuration.
+    /// Upserts per-context severity configuration (merges by context type).
     ///
     /// Returns `InvalidRequest` if the supplied list is empty.
     async fn configure(
@@ -304,7 +336,14 @@ impl LogProvider for DiagLogProvider {
                 "configuration list must not be empty".into(),
             ));
         }
-        self.state.write().await.config = configuration;
+        let mut state = self.state.write().await;
+        for incoming in configuration {
+            if let Some(existing) = state.config.iter_mut().find(|c| context_matches(&c.context, &incoming.context)) {
+                existing.severity = incoming.severity;
+            } else {
+                state.config.push(incoming);
+            }
+        }
         Ok(())
     }
 
