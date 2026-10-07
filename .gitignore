@@ -3,3 +3,9 @@
 # Rust build artifacts
 /target
 **/target
+# Python test artifacts
+.venv/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+report.html
