@@ -258,6 +258,7 @@
 
   let allEntries = [];
   let allConfig  = [];   // full config list cached from last GET
+  let currentCtxFilter = null; // null = show all, string = filter by context type
   let refreshTimer = null;
 
   // ── Fetch log entries ──────────────────────────────────────────────
@@ -279,9 +280,9 @@
 
   function renderEntries() {
     const text   = document.getElementById('filter-text').value.toLowerCase();
-    const ctxSel = document.getElementById('cfg-ctx-type').value;  // selected context type
+    const ctxSel = currentCtxFilter;  // null means show all
     const rows = allEntries.filter(e => {
-      if (e.context?.type !== ctxSel) return false;
+      if (ctxSel && e.context?.type !== ctxSel) return false;
       return !text || (e.msg ?? '').toLowerCase().includes(text);
     });
 
@@ -369,6 +370,7 @@
       });
       if (r.status === 204 || r.ok) {
         showConfigMsg('Config updated ✓', true);
+        currentCtxFilter = ctxType;  // filter log table to this context
         fetchConfig();
         fetchEntries();
       } else {
@@ -386,8 +388,11 @@
       const r = await fetch(CONFIG_URL, { method: 'DELETE' });
       if (r.status === 204 || r.ok) {
         showConfigMsg('Config reset ✓', true);
-        fetchConfig();
-        fetchEntries();
+        // clear context filter so all entries show regardless of type
+        currentCtxFilter = null;
+        document.getElementById('filter-sev').value = '';
+        await fetchConfig();
+        await fetchEntries();
       } else {
         showConfigMsg(`Error ${r.status}`, false);
       }
@@ -407,6 +412,7 @@
 
   // also re-render when context type selector changes
   document.getElementById('cfg-ctx-type').addEventListener('change', () => {
+    currentCtxFilter = document.getElementById('cfg-ctx-type').value;
     renderActiveConfig();
     renderEntries();
   });
