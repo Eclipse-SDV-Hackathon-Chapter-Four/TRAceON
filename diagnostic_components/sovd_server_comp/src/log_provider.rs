@@ -8,13 +8,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use opensovd_core::{
-    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogSeverity,
+    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogResult,
+    LogSeverity,
 };
 use tokio::sync::RwLock;
-
-/// Result alias matching the `LogProvider` trait's associated result type.
-/// `opensovd_core`'s own `log::Result` is not publicly re-exported.
-type LogResult<T> = std::result::Result<T, LogError>;
 
 // ---------------------------------------------------------------------------
 // Internal state

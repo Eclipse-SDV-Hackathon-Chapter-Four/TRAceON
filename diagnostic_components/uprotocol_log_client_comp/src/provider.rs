@@ -12,14 +12,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use opensovd_core::{
-    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogSeverity,
+    LogConfiguration, LogContext, LogEntry, LogError, LogFilter, LogProvider, LogResult,
+    LogSeverity,
 };
 
 use crate::client::LogServiceClient;
 use crate::wire::{self, LogQuery, LogResponse, WireLogEntry};
-
-/// Result alias matching the `LogProvider` trait's associated result type.
-type LogResult<T> = std::result::Result<T, LogError>;
 
 /// SOVD log provider that delegates to an ECU over uProtocol.
 pub struct UProtocolLogProvider {
