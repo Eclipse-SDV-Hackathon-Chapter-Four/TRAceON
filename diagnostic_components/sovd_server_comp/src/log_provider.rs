@@ -429,17 +429,7 @@ fn matches_filter(entry: &LogEntry, filter: &LogFilter) -> bool {
 /// Returns whether `value` is at least as severe as `threshold` according to
 /// the SOVD severity ordering.
 fn severity_at_least(value: LogSeverity, threshold: LogSeverity) -> bool {
-    severity_rank(value) <= severity_rank(threshold)
-}
-
-fn severity_rank(severity: LogSeverity) -> u8 {
-    match severity {
-        LogSeverity::Fatal | LogSeverity::DltFatal => 0,
-        LogSeverity::Error | LogSeverity::DltError => 1,
-        LogSeverity::Warn | LogSeverity::DltWarn => 2,
-        LogSeverity::Info | LogSeverity::DltInfo => 3,
-        LogSeverity::Debug | LogSeverity::DltDebug => 4,
-    }
+    value.rank() <= threshold.rank()
 }
 
 fn parse_hardware_entry(value: &Value) -> Result<LogEntry> {
@@ -553,4 +543,119 @@ fn string_field(value: &serde_json::Map<String, serde_json::Value>, field: &str)
         .get(field)
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned)
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone, Utc};
+    use futures::StreamExt;
+    use serde_json::json;
+
+    use super::*;
+
+    fn hardware_entry(severity: &str, timestamp: &str, message: &str) -> Value {
+        json!({
+            "timestamp": timestamp,
+            "context": {
+                "type": "AUTOSAR_DLT",
+                "application_id": "TRAC",
+                "context_id": "Main",
+                "session": "",
+                "session_id": "",
+                "message_id": ""
+            },
+            "severity": severity,
+            "msg": message
+        })
+    }
+
+    #[test]
+    fn autosar_dlt_info_is_preserved_as_a_dlt_severity() {
+        let entry =
+            parse_hardware_entry(&hardware_entry("INFO", "2026-10-07T08:00:00Z", "heartbeat"))
+                .unwrap();
+
+        assert_eq!(entry.severity, LogSeverity::DltInfo);
+        assert!(matches!(entry.context, LogContext::AutosarDlt { .. }));
+    }
+
+    #[test]
+    fn explicit_dlt_severities_are_accepted_case_insensitively() {
+        let entry = parse_hardware_entry(&hardware_entry(
+            "dLt_WaRn",
+            "2026-10-07T08:00:00Z",
+            "warning",
+        ))
+        .unwrap();
+
+        assert_eq!(entry.severity, LogSeverity::DltWarn);
+    }
+
+    #[test]
+    fn malformed_hardware_entries_are_rejected() {
+        let missing_message = json!({
+            "timestamp": "2026-10-07T08:00:00Z",
+            "severity": "INFO"
+        });
+        assert!(parse_hardware_entry(&missing_message).is_err());
+
+        let unknown_severity =
+            hardware_entry("not-a-severity", "2026-10-07T08:00:00Z", "bad input");
+        assert!(parse_hardware_entry(&unknown_severity).is_err());
+    }
+
+    #[tokio::test]
+    async fn entries_apply_dlt_threshold_filtering() {
+        let provider = DiagLogProvider::new();
+        provider
+            .ingest_hardware_event(hardware_entry("DLT_DEBUG", "2099-01-01T00:00:00Z", "debug"))
+            .await
+            .unwrap();
+        provider
+            .ingest_hardware_event(hardware_entry("DLT_INFO", "2099-01-01T00:00:01Z", "info"))
+            .await
+            .unwrap();
+
+        let entries = provider
+            .entries(LogFilter {
+                severity: Some(LogSeverity::DltInfo),
+                created_after: Some(Utc.with_ymd_and_hms(2098, 1, 1, 0, 0, 0).unwrap()),
+                created_before: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].severity, LogSeverity::DltInfo);
+    }
+
+    #[tokio::test]
+    async fn live_stream_skips_entries_below_the_requested_threshold() {
+        let provider = DiagLogProvider::new();
+        let mut stream = provider
+            .stream(LogFilter {
+                severity: Some(LogSeverity::DltInfo),
+                created_after: None,
+                created_before: None,
+            })
+            .await
+            .unwrap();
+
+        provider
+            .ingest_hardware_event(hardware_entry("DLT_DEBUG", "2099-01-01T00:00:00Z", "debug"))
+            .await
+            .unwrap();
+        provider
+            .ingest_hardware_event(hardware_entry("DLT_INFO", "2099-01-01T00:00:01Z", "info"))
+            .await
+            .unwrap();
+
+        let entry = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(entry.severity, LogSeverity::DltInfo);
+        assert_eq!(entry.msg, "info");
+    }
 }

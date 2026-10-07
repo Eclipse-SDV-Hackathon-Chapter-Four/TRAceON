@@ -51,9 +51,7 @@ impl LogProvider for UProtocolLogProvider {
             .map_err(|e| LogError::Internal(e.to_string()))?;
 
         Ok(match response {
-            LogResponse::Entries(entries) => {
-                entries.into_iter().map(wire_entry_to_sovd).collect()
-            }
+            LogResponse::Entries(entries) => entries.into_iter().map(wire_entry_to_sovd).collect(),
             LogResponse::PlainText(text) => vec![plain_text_entry(text)],
         })
     }
@@ -74,10 +72,7 @@ impl LogProvider for UProtocolLogProvider {
     ///
     /// Each `LogConfiguration` is mapped to a wire rule; only RFC 5424
     /// contexts are supported, since that is the context the ECU reports.
-    async fn configure(
-        &self,
-        configuration: Vec<LogConfiguration>,
-    ) -> Result<(), LogError> {
+    async fn configure(&self, configuration: Vec<LogConfiguration>) -> Result<(), LogError> {
         let wire: Vec<WireLogConfig> = configuration
             .into_iter()
             .map(sovd_config_to_wire)
@@ -106,11 +101,11 @@ impl LogProvider for UProtocolLogProvider {
 /// Maps a SOVD severity onto the service enum encoding (kFatal=0 .. kDebug=4).
 fn severity_to_wire(severity: LogSeverity) -> u8 {
     match severity {
-        LogSeverity::Fatal => wire::severity::FATAL,
-        LogSeverity::Error => wire::severity::ERROR,
-        LogSeverity::Warn => wire::severity::WARN,
-        LogSeverity::Info => wire::severity::INFO,
-        LogSeverity::Debug => wire::severity::DEBUG,
+        LogSeverity::Fatal | LogSeverity::DltFatal => wire::severity::FATAL,
+        LogSeverity::Error | LogSeverity::DltError => wire::severity::ERROR,
+        LogSeverity::Warn | LogSeverity::DltWarn => wire::severity::WARN,
+        LogSeverity::Info | LogSeverity::DltInfo => wire::severity::INFO,
+        LogSeverity::Debug | LogSeverity::DltDebug => wire::severity::DEBUG,
     }
 }
 
@@ -167,11 +162,9 @@ fn sovd_config_to_wire(cfg: LogConfiguration) -> Result<WireLogConfig, LogError>
             host,
             process,
         }),
-        LogContext::AutosarDlt { .. } | LogContext::Custom { .. } => {
-            Err(LogError::InvalidRequest(
-                "only RFC 5424 contexts are supported by the uProtocol log client config".into(),
-            ))
-        }
+        LogContext::AutosarDlt { .. } | LogContext::Custom { .. } => Err(LogError::InvalidRequest(
+            "only RFC 5424 contexts are supported by the uProtocol log client config".into(),
+        )),
     }
 }
 
