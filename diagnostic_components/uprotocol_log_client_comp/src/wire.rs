@@ -59,6 +59,27 @@ pub struct WireLogEntry {
     pub process: Option<String>,
 }
 
+/// A single capture-configuration rule as reported by the ECU `getConfig` RPC.
+///
+/// Flat, transport-friendly shape mirroring [`WireLogEntry`]: it carries an
+/// optional RFC 5424 context (`host`/`process`) and the severity threshold the
+/// ECU is capturing for that context. The adapter maps it onto
+/// `opensovd_core::LogConfiguration` with an RFC 5424 context.
+///
+/// `severity` uses the service enum encoding (kFatal=0 .. kDebug=4) and is the
+/// *capture threshold*: entries at that severity or more severe are retained.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WireLogConfig {
+    /// Capture threshold, service enum encoding.
+    pub severity: u8,
+    /// Context host this rule applies to, if scoped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    /// Context process this rule applies to, if scoped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process: Option<String>,
+}
+
 /// Response payload for `getLogs`.
 ///
 /// Two shapes are accepted so the adapter is robust against a provider that

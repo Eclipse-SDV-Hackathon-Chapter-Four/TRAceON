@@ -17,7 +17,7 @@ use opensovd_core::{
 };
 
 use crate::client::LogServiceClient;
-use crate::wire::{self, LogQuery, LogResponse, WireLogEntry};
+use crate::wire::{self, LogQuery, LogResponse, WireLogConfig, WireLogEntry};
 
 /// SOVD log provider that delegates to an ECU over uProtocol.
 pub struct UProtocolLogProvider {
@@ -59,27 +59,44 @@ impl LogProvider for UProtocolLogProvider {
         })
     }
 
-    /// Capture configuration is owned by the ECU; without a dedicated RPC the
-    /// client cannot read it, so an empty configuration is reported.
+    /// Reads the ECU's capture configuration over the `getConfig` RPC and maps
+    /// each rule onto a SOVD `LogConfiguration` with an RFC 5424 context.
     async fn configuration(&self) -> LogResult<Vec<LogConfiguration>> {
-        Ok(Vec::new())
+        let config = self
+            .client
+            .get_config()
+            .await
+            .map_err(|e| LogError::Internal(e.to_string()))?;
+
+        Ok(config.into_iter().map(wire_config_to_sovd).collect())
     }
 
-    /// Reconfiguring the ECU is not exposed through `getLogs`.
+    /// Replaces the ECU's capture configuration over the `configure` RPC.
+    ///
+    /// Each `LogConfiguration` is mapped to a wire rule; only RFC 5424
+    /// contexts are supported, since that is the context the ECU reports.
     async fn configure(
         &self,
-        _configuration: Vec<LogConfiguration>,
+        configuration: Vec<LogConfiguration>,
     ) -> LogResult<()> {
-        Err(LogError::InvalidRequest(
-            "log configuration is not supported by the uProtocol log client".into(),
-        ))
+        let wire: Vec<WireLogConfig> = configuration
+            .into_iter()
+            .map(sovd_config_to_wire)
+            .collect::<LogResult<_>>()?;
+
+        self.client
+            .set_config(&wire)
+            .await
+            .map_err(|e| LogError::Internal(e.to_string()))
     }
 
-    /// Resetting the ECU configuration is not exposed through `getLogs`.
+    /// Restores the ECU's default capture configuration over the `resetConfig`
+    /// RPC.
     async fn reset_configuration(&self) -> LogResult<()> {
-        Err(LogError::InvalidRequest(
-            "log configuration is not supported by the uProtocol log client".into(),
-        ))
+        self.client
+            .reset_config()
+            .await
+            .map_err(|e| LogError::Internal(e.to_string()))
     }
 }
 
@@ -136,6 +153,39 @@ fn wire_entry_to_sovd(entry: WireLogEntry) -> LogEntry {
         severity: wire_to_severity(entry.severity),
         msg: entry.msg,
         href: None,
+    }
+}
+
+/// Maps a SOVD `LogConfiguration` onto a wire capture-config rule.
+///
+/// Only RFC 5424 contexts are representable on the wire (the ECU reports and
+/// accepts `host`/`process`); other context variants are rejected with
+/// `InvalidRequest`.
+fn sovd_config_to_wire(cfg: LogConfiguration) -> LogResult<WireLogConfig> {
+    match cfg.context {
+        LogContext::Rfc5424 { host, process, .. } => Ok(WireLogConfig {
+            severity: severity_to_wire(cfg.severity),
+            host,
+            process,
+        }),
+        LogContext::AutosarDlt { .. } | LogContext::Custom { .. } => {
+            Err(LogError::InvalidRequest(
+                "only RFC 5424 contexts are supported by the uProtocol log client config".into(),
+            ))
+        }
+    }
+}
+
+/// Maps a wire capture-config rule onto a SOVD `LogConfiguration`, reporting an
+/// RFC 5424 context (matching how entries are reported).
+fn wire_config_to_sovd(cfg: WireLogConfig) -> LogConfiguration {
+    LogConfiguration {
+        context: LogContext::Rfc5424 {
+            host: cfg.host,
+            process: cfg.process,
+            pid: None,
+        },
+        severity: wire_to_severity(cfg.severity),
     }
 }
 

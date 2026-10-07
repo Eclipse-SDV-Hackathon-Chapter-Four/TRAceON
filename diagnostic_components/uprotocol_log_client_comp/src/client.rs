@@ -14,7 +14,7 @@ use std::sync::Arc;
 use up_rust::communication::{CallOptions, InMemoryRpcClient, RpcClient, UPayload};
 use up_rust::{LocalUriProvider, StaticUriProvider, UPayloadFormat, UPriority, UTransport, UUri};
 
-use crate::wire::{LogQuery, LogResponse};
+use crate::wire::{LogQuery, LogResponse, WireLogConfig};
 
 /// Addressing and timing for the ECU log service.
 ///
@@ -31,6 +31,12 @@ pub struct ServiceConfig {
     pub version_major: u8,
     /// Resource/method id of `getLogs`.
     pub get_logs_method_id: u16,
+    /// Resource/method id of `getConfig`.
+    pub get_config_method_id: u16,
+    /// Resource/method id of `configure` (replace capture config).
+    pub configure_method_id: u16,
+    /// Resource/method id of `resetConfig` (restore default capture config).
+    pub reset_config_method_id: u16,
     /// RPC time-to-live in milliseconds.
     pub timeout_ms: u32,
 }
@@ -42,6 +48,9 @@ impl Default for ServiceConfig {
             service_id: 0x8010,
             version_major: 1,
             get_logs_method_id: 0x0001,
+            get_config_method_id: 0x0002,
+            configure_method_id: 0x0003,
+            reset_config_method_id: 0x0004,
             timeout_ms: 5000,
         }
     }
@@ -63,7 +72,10 @@ pub enum ClientError {
 /// uProtocol client for the ECU log service.
 pub struct LogServiceClient {
     rpc: InMemoryRpcClient,
-    method: UUri,
+    get_logs_method: UUri,
+    get_config_method: UUri,
+    configure_method: UUri,
+    reset_config_method: UUri,
     config: ServiceConfig,
 }
 
@@ -92,17 +104,25 @@ impl LogServiceClient {
             .await
             .map_err(|e| ClientError::Setup(e.to_string()))?;
 
-        let method = UUri {
+        let method_uri = |resource_id: u16| UUri {
             authority_name: config.authority.clone(),
             ue_id: config.service_id,
             ue_version_major: u32::from(config.version_major),
-            resource_id: u32::from(config.get_logs_method_id),
+            resource_id: u32::from(resource_id),
             ..Default::default()
         };
 
+        let get_logs_method = method_uri(config.get_logs_method_id);
+        let get_config_method = method_uri(config.get_config_method_id);
+        let configure_method = method_uri(config.configure_method_id);
+        let reset_config_method = method_uri(config.reset_config_method_id);
+
         Ok(Self {
             rpc,
-            method,
+            get_logs_method,
+            get_config_method,
+            configure_method,
+            reset_config_method,
             config,
         })
     }
@@ -125,12 +145,82 @@ impl LogServiceClient {
 
         let response = self
             .rpc
-            .invoke_method(self.method.clone(), options, Some(payload))
+            .invoke_method(self.get_logs_method.clone(), options, Some(payload))
             .await
             .map_err(|e| ClientError::Invoke(e.to_string()))?
             .ok_or(ClientError::EmptyResponse)?;
 
         let bytes = response.payload();
         LogResponse::parse(&bytes).map_err(ClientError::Encode)
+    }
+
+    /// Calls the ECU `getConfig` method and returns the capture configuration.
+    ///
+    /// The request carries no payload — `getConfig` takes no arguments. The
+    /// response is a JSON array of [`WireLogConfig`] rules.
+    ///
+    /// # Errors
+    /// Returns a [`ClientError`] if invocation, the (empty) response, or
+    /// decoding fails.
+    pub async fn get_config(&self) -> Result<Vec<WireLogConfig>, ClientError> {
+        let options = CallOptions::for_rpc_request(
+            self.config.timeout_ms,
+            None,
+            None,
+            Some(UPriority::UPRIORITY_CS4),
+        );
+
+        let response = self
+            .rpc
+            .invoke_method(self.get_config_method.clone(), options, None)
+            .await
+            .map_err(|e| ClientError::Invoke(e.to_string()))?
+            .ok_or(ClientError::EmptyResponse)?;
+
+        let bytes = response.payload();
+        serde_json::from_slice::<Vec<WireLogConfig>>(&bytes).map_err(ClientError::Encode)
+    }
+
+    /// Calls the ECU `configure` method, replacing the capture configuration
+    /// with `config`. The request body is a JSON array of [`WireLogConfig`].
+    ///
+    /// # Errors
+    /// Returns a [`ClientError`] if encoding or invocation fails.
+    pub async fn set_config(&self, config: &[WireLogConfig]) -> Result<(), ClientError> {
+        let body = serde_json::to_vec(config)?;
+        let payload = UPayload::new(body, UPayloadFormat::UPAYLOAD_FORMAT_RAW);
+
+        let options = CallOptions::for_rpc_request(
+            self.config.timeout_ms,
+            None,
+            None,
+            Some(UPriority::UPRIORITY_CS4),
+        );
+
+        self.rpc
+            .invoke_method(self.configure_method.clone(), options, Some(payload))
+            .await
+            .map_err(|e| ClientError::Invoke(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Calls the ECU `resetConfig` method, restoring the default capture
+    /// configuration. The request carries no payload.
+    ///
+    /// # Errors
+    /// Returns a [`ClientError`] if invocation fails.
+    pub async fn reset_config(&self) -> Result<(), ClientError> {
+        let options = CallOptions::for_rpc_request(
+            self.config.timeout_ms,
+            None,
+            None,
+            Some(UPriority::UPRIORITY_CS4),
+        );
+
+        self.rpc
+            .invoke_method(self.reset_config_method.clone(), options, None)
+            .await
+            .map_err(|e| ClientError::Invoke(e.to_string()))?;
+        Ok(())
     }
 }
