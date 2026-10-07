@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
 // SPDX-License-Identifier: Apache-2.0
+/* Portions of this file were generated with AI assistance. */
 
 //! End-to-end check of the uProtocol log client against an in-process ECU
 //! stand-in, exercising both response shapes (structured entries and the

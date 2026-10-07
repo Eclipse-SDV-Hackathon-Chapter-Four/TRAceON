@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
 // SPDX-License-Identifier: Apache-2.0
+/* Portions of this file were generated with AI assistance. */
 
 //! Wire format for the `getLogs` uProtocol RPC.
 //!
-//! The toos-api codegen layer is deliberately not used. Instead the request and
-//! response are serialized as JSON, so any ECU-side provider (including the C++
-//! dummy app, which already uses nlohmann/json) can speak the same contract.
+//! The toos-api codegen layer is deliberately not used. Instead the request
+//! and response are serialized as JSON (`UPAYLOAD_FORMAT_JSON`), so any
+//! ECU-side provider (including the C++ dummy app, which already uses
+//! nlohmann/json) can speak the same contract.
 //!
 //! Request mirrors `DummyLogProviderService::LogQuery`:
 //!   `{ "severity": u8, "created_after": u64, "created_before": u64 }`

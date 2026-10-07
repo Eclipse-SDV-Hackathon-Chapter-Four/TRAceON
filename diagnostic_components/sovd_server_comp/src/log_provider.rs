@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+// SPDX-License-Identifier: Apache-2.0
+/* Portions of this file were generated with AI assistance. */
+
 // Diagnostic log provider — implements opensovd_core::LogProvider.
 //
 // Reads log entries from the realtime hardware and stores the per-context
