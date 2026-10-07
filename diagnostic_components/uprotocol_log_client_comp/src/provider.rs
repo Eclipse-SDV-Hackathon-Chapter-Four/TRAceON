@@ -107,11 +107,11 @@ impl LogProvider for UProtocolLogProvider {
 /// Maps a SOVD severity onto the service enum encoding (kFatal=0 .. kDebug=4).
 fn severity_to_wire(severity: LogSeverity) -> u8 {
     match severity {
-        LogSeverity::Fatal => wire::severity::FATAL,
-        LogSeverity::Error => wire::severity::ERROR,
-        LogSeverity::Warn => wire::severity::WARN,
-        LogSeverity::Info => wire::severity::INFO,
-        LogSeverity::Debug => wire::severity::DEBUG,
+        LogSeverity::Fatal | LogSeverity::DltFatal => wire::severity::FATAL,
+        LogSeverity::Error | LogSeverity::DltError => wire::severity::ERROR,
+        LogSeverity::Warn  | LogSeverity::DltWarn  => wire::severity::WARN,
+        LogSeverity::Info  | LogSeverity::DltInfo  => wire::severity::INFO,
+        LogSeverity::Debug | LogSeverity::DltDebug => wire::severity::DEBUG,
     }
 }
 

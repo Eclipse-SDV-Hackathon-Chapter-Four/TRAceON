@@ -1,170 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
   <title>TRAceON — SOVD Log Viewer</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #58a6ff;
-      --fatal: #ff7b72;
-      --error: #ffa657;
-      --warn: #e3b341;
-      --info: #3fb950;
-      --debug: #8b949e;
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d1117;--surface:#161b22;--border:#30363d;
+      --text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;
+      --fatal:#ff7b72;--error:#ffa657;--warn:#e3b341;--info:#3fb950;--debug:#8b949e;
     }
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+    header{display:flex;align-items:center;gap:12px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+    header h1{font-size:18px;font-weight:700;color:var(--accent)}
+    header .sub{font-size:11px;color:var(--muted)}
+    #dot{width:9px;height:9px;border-radius:50%;background:var(--debug);margin-left:auto}
+    #dot.ok{background:var(--info)} #dot.err{background:var(--fatal)}
+    #status{font-size:12px;color:var(--muted)}
 
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+    main{display:grid;grid-template-columns:1fr 320px;height:calc(100vh - 49px)}
 
-    header {
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 24px; border-bottom: 1px solid var(--border);
-      background: var(--surface);
-    }
-    header h1 { font-size: 18px; font-weight: 600; color: var(--accent); }
-    header .subtitle { color: var(--muted); font-size: 12px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--info); margin-left: auto; }
-    .status-dot.error { background: var(--fatal); }
-    #status-label { font-size: 12px; color: var(--muted); }
+    /* log panel */
+    .log-panel{display:flex;flex-direction:column;border-right:1px solid var(--border)}
+    .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+    .toolbar label{font-size:12px;color:var(--muted)}
+    select,input{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:12px}
+    button{background:var(--accent);color:#0d1117;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer}
+    button.sec{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+    button:hover{opacity:.85}
+    .spacer{flex:1}
+    #count{font-size:12px;color:var(--muted)}
 
-    main { display: grid; grid-template-columns: 1fr 340px; gap: 0; height: calc(100vh - 53px); }
+    .tbl-wrap{flex:1;overflow-y:auto}
+    table{width:100%;border-collapse:collapse}
+    thead th{position:sticky;top:0;background:var(--surface);padding:7px 10px;text-align:left;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
+    tbody tr{border-bottom:1px solid #21262d;cursor:pointer}
+    tbody tr:hover{background:#1c2128}
+    td{padding:6px 10px;font-size:12px;vertical-align:top}
+    .ts{color:var(--muted);font-family:monospace;font-size:11px;white-space:nowrap}
+    .ctx{color:var(--muted);font-size:11px}
+    .msg{word-break:break-word}
+    .badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700}
+    .FATAL{color:var(--fatal)} .ERROR{color:var(--error)} .WARN{color:var(--warn)} .INFO{color:var(--info)} .DEBUG{color:var(--debug)}
+    .b-FATAL{background:#3d1a1a;color:var(--fatal)} .b-ERROR{background:#3d2a1a;color:var(--error)}
+    .b-WARN{background:#3d3010;color:var(--warn)}   .b-INFO{background:#1a3d1a;color:var(--info)}
+    .b-DEBUG{background:#1e2530;color:var(--debug)}
+    .empty{display:flex;align-items:center;justify-content:center;height:160px;color:var(--muted);font-size:13px}
 
-    /* ── Log panel ── */
-    .log-panel { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+    /* config panel */
+    .cfg-panel{display:flex;flex-direction:column;overflow-y:auto}
+    .cfg-panel h2{padding:12px 14px;font-size:13px;font-weight:700;background:var(--surface);border-bottom:1px solid var(--border)}
+    .cfg-body{padding:14px;display:flex;flex-direction:column;gap:10px}
+    .cfg-body label{font-size:11px;color:var(--muted)}
+    .cfg-body select{width:100%}
+    #cur-cfg{font-size:12px;color:var(--muted);padding:4px 0}
+    .cfg-btns{display:flex;gap:8px}
+    .cfg-btns button{flex:1}
+    #cfg-msg{padding:7px 10px;border-radius:5px;font-size:12px;display:none;margin-top:4px}
+    #cfg-msg.ok{background:#1a3d1a;color:var(--info);display:block}
+    #cfg-msg.err{background:#3d1a1a;color:var(--fatal);display:block}
 
-    .toolbar {
-      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-      padding: 10px 16px; border-bottom: 1px solid var(--border);
-      background: var(--surface);
-    }
-    .toolbar label { color: var(--muted); font-size: 12px; }
-    select, input[type=text] {
-      background: var(--bg); color: var(--text); border: 1px solid var(--border);
-      border-radius: 6px; padding: 5px 10px; font-size: 13px; outline: none;
-    }
-    select:focus, input:focus { border-color: var(--accent); }
-    button {
-      background: var(--accent); color: #0d1117; border: none; border-radius: 6px;
-      padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
-    }
-    button.secondary {
-      background: var(--surface); color: var(--text); border: 1px solid var(--border);
-    }
-    button:hover { opacity: 0.85; }
-    .spacer { flex: 1; }
-    #entry-count { font-size: 12px; color: var(--muted); }
-
-    .log-table-wrap { flex: 1; overflow-y: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    thead th {
-      position: sticky; top: 0; background: var(--surface);
-      padding: 8px 12px; text-align: left; font-size: 12px;
-      color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500;
-    }
-    tbody tr { border-bottom: 1px solid #21262d; transition: background 0.1s; }
-    tbody tr:hover { background: #1c2128; cursor: pointer; }
-    tbody td { padding: 7px 12px; font-size: 13px; vertical-align: top; }
-    td.sev { font-weight: 700; font-size: 11px; white-space: nowrap; }
-    td.ts  { color: var(--muted); font-size: 11px; white-space: nowrap; font-family: monospace; }
-    td.ctx { color: var(--muted); font-size: 11px; }
-    td.msg { word-break: break-word; }
-
-    .sev-FATAL { color: var(--fatal); }
-    .sev-ERROR { color: var(--error); }
-    .sev-WARN  { color: var(--warn);  }
-    .sev-INFO  { color: var(--info);  }
-    .sev-DEBUG { color: var(--debug); }
-
-    .empty-state {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      height: 200px; color: var(--muted); gap: 8px;
-    }
-    .empty-state svg { opacity: 0.3; }
-
-    /* ── Config panel ── */
-    .config-panel { display: flex; flex-direction: column; overflow-y: auto; }
-    .config-panel h2 {
-      padding: 14px 16px; font-size: 14px; font-weight: 600;
-      border-bottom: 1px solid var(--border); background: var(--surface);
-    }
-
-    .config-section { padding: 16px; border-bottom: 1px solid var(--border); }
-    .config-section h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
-
-    .sev-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 6px 0; border-bottom: 1px solid #21262d;
-    }
-    .sev-row:last-child { border-bottom: none; }
-    .sev-label { font-size: 13px; font-weight: 600; }
-    .sev-badge {
-      display: inline-block; padding: 2px 8px; border-radius: 10px;
-      font-size: 11px; font-weight: 700;
-    }
-    .badge-FATAL { background: #3d1a1a; color: var(--fatal); }
-    .badge-ERROR { background: #3d2a1a; color: var(--error); }
-    .badge-WARN  { background: #3d3010; color: var(--warn);  }
-    .badge-INFO  { background: #1a3d1a; color: var(--info);  }
-    .badge-DEBUG { background: #1e2530; color: var(--debug); }
-
-    .config-form { display: flex; flex-direction: column; gap: 10px; }
-    .config-form label { font-size: 12px; color: var(--muted); }
-    .config-form select { width: 100%; }
-    .config-actions { display: flex; gap: 8px; margin-top: 4px; }
-    .config-actions button { flex: 1; }
-
-    #config-msg {
-      margin: 8px 16px; padding: 8px 12px; border-radius: 6px;
-      font-size: 12px; display: none;
-    }
-    #config-msg.ok  { background: #1a3d1a; color: var(--info); display: block; }
-    #config-msg.err { background: #3d1a1a; color: var(--fatal); display: block; }
-
-    .auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-    .auto-refresh input[type=checkbox] { accent-color: var(--accent); }
-
-    /* detail drawer */
-    #detail {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: var(--surface); border-top: 1px solid var(--border);
-      padding: 14px 24px; max-height: 220px; overflow-y: auto;
-      font-family: monospace; font-size: 12px; display: none;
-    }
-    #detail.open { display: block; }
-    #detail-close {
-      float: right; background: none; border: none; color: var(--muted);
-      font-size: 18px; cursor: pointer; padding: 0;
-    }
+    /* detail */
+    #detail{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 20px;max-height:200px;overflow-y:auto;font-family:monospace;font-size:11px;display:none}
+    #detail.open{display:block}
+    #det-close{float:right;background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0}
   </style>
 </head>
 <body>
-
 <header>
-  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+  <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
     <rect width="28" height="28" rx="6" fill="#1f6feb"/>
     <path d="M7 9h14M7 14h10M7 19h12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
   </svg>
-  <div>
-    <h1>TRAceON</h1>
-    <div class="subtitle">SOVD Log Viewer · diag-app</div>
-  </div>
-  <div class="status-dot" id="status-dot"></div>
-  <span id="status-label">connecting…</span>
+  <div><h1>TRAceON</h1><div class="sub">SOVD Log Viewer · diag-app</div></div>
+  <div id="dot"></div>
+  <span id="status">connecting…</span>
 </header>
 
 <main>
-  <!-- ── Log panel ── -->
   <section class="log-panel">
     <div class="toolbar">
       <label>Severity</label>
-      <select id="filter-sev">
+      <select id="f-sev">
         <option value="">All</option>
         <option value="fatal">Fatal</option>
         <option value="error">Error</option>
@@ -172,289 +89,218 @@
         <option value="info">Info</option>
         <option value="debug">Debug</option>
       </select>
-
       <label>Search</label>
-      <input type="text" id="filter-text" placeholder="message…" style="width:160px" />
-
+      <input id="f-txt" placeholder="message…" style="width:140px"/>
       <div class="spacer"></div>
-
-      <label class="auto-refresh">
-        <input type="checkbox" id="auto-refresh" checked /> Auto-refresh
-      </label>
-      <button class="secondary" id="btn-refresh">↻ Refresh</button>
-      <span id="entry-count"></span>
+      <label><input type="checkbox" id="auto" checked/> Auto</label>
+      <button class="sec" id="btn-ref">↻ Refresh</button>
+      <span id="count"></span>
     </div>
-
-    <div class="log-table-wrap">
+    <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr>
-            <th style="width:80px">Severity</th>
-            <th style="width:160px">Timestamp</th>
-            <th style="width:200px">Context</th>
-            <th>Message</th>
-          </tr>
-        </thead>
-        <tbody id="log-body"></tbody>
+        <thead><tr>
+          <th style="width:72px">Sev</th>
+          <th style="width:150px">Timestamp</th>
+          <th style="width:180px">Context</th>
+          <th>Message</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
       </table>
-      <div class="empty-state" id="empty-state" style="display:none">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M9 12h6M9 16h4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
-        </svg>
-        <span>No log entries</span>
-      </div>
+      <div class="empty" id="empty" style="display:none">No log entries</div>
     </div>
   </section>
 
-  <!-- ── Config panel ── -->
-  <aside class="config-panel">
+  <aside class="cfg-panel">
     <h2>⚙ Log Configuration</h2>
-
-    <div class="config-section">
-      <div class="config-form">
-        <label>Context Type</label>
-        <select id="cfg-ctx-type">
-          <option value="RFC5424">RFC 5424</option>
-          <option value="AUTOSAR_DLT">AUTOSAR DLT</option>
-          <option value="Custom">Custom</option>
-        </select>
-
-        <div id="active-config" style="padding:6px 0; font-size:12px; color:var(--muted)">Loading…</div>
-
-        <label>Min Severity</label>
-        <select id="cfg-severity">
-          <option value="fatal">Fatal</option>
-          <option value="error">Error</option>
-          <option value="warn">Warn</option>
-          <option value="info" selected>Info</option>
-          <option value="debug">Debug</option>
-        </select>
-
-        <div class="config-actions">
-          <button id="btn-apply">Apply</button>
-          <button class="secondary" id="btn-reset">Reset</button>
-        </div>
+    <div class="cfg-body">
+      <label>Context Type</label>
+      <select id="cfg-ctx">
+        <option value="RFC5424">RFC 5424</option>
+        <option value="AUTOSAR_DLT">AUTOSAR DLT</option>
+      </select>
+      <div id="cur-cfg">Loading…</div>
+      <label>Min Severity</label>
+      <select id="cfg-sev">
+        <option value="fatal">Fatal</option>
+        <option value="error">Error</option>
+        <option value="warn">Warn</option>
+        <option value="info" selected>Info</option>
+        <option value="debug">Debug</option>
+      </select>
+      <div class="cfg-btns">
+        <button id="btn-apply">Apply</button>
+        <button class="sec" id="btn-reset">Reset</button>
       </div>
+      <div id="cfg-msg"></div>
     </div>
-
-    <div id="config-msg"></div>
   </aside>
 </main>
 
-<!-- Entry detail drawer -->
 <div id="detail">
-  <button id="detail-close">✕</button>
-  <pre id="detail-content"></pre>
+  <button id="det-close">✕</button>
+  <pre id="det-body"></pre>
 </div>
 
 <script>
-  const BASE = '';  // same origin
-  const APP  = 'diag-app';
-  const ENTRIES_URL = `${BASE}/v1/apps/${APP}/logs/entries`;
-  const CONFIG_URL  = `${BASE}/v1/apps/${APP}/logs/config`;
+  // ── API base — SOVD server is on port 8080 ──────────────────────────
+  const API = 'http://172.26.10.72:8080/sovd/v1/apps/diag-app/logs';
 
-  const SEV_ORDER = ['Fatal','Error','Warn','Info','Debug'];
-  const CTX_LABELS = { 'RFC5424': 'RFC 5424', 'AUTOSAR_DLT': 'AUTOSAR DLT' };
+  let entries = [];
+  let config  = [];
+  let timer   = null;
 
-  let allEntries = [];
-  let allConfig  = [];   // full config list cached from last GET
-  let currentCtxFilter = null; // null = show all, string = filter by context type
-  let refreshTimer = null;
-
-  // ── Fetch log entries ──────────────────────────────────────────────
-  async function fetchEntries() {
-    const sev = document.getElementById('filter-sev').value;
-    const url = sev ? `${ENTRIES_URL}?severity=${sev.toLowerCase()}` : ENTRIES_URL;
+  // ── fetch entries ───────────────────────────────────────────────────
+  async function loadEntries() {
+    const sev = document.getElementById('f-sev').value;
+    const url = sev ? `${API}/entries?severity=${sev}` : `${API}/entries`;
     try {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      allEntries = data.items ?? data ?? [];
-      setStatus(true);
-    } catch (e) {
-      setStatus(false, e.message);
-      allEntries = [];
+      const d = await r.json();
+      entries = d.items ?? d ?? [];
+      setDot(true);
+    } catch(e) {
+      setDot(false, e.message);
+      entries = [];
     }
-    renderEntries();
+    render();
   }
 
-  function renderEntries() {
-    const text   = document.getElementById('filter-text').value.toLowerCase();
-    const ctxSel = currentCtxFilter;  // null means show all
-    const rows = allEntries.filter(e => {
-      if (ctxSel && e.context?.type !== ctxSel) return false;
-      return !text || (e.msg ?? '').toLowerCase().includes(text);
-    });
-
-    const tbody = document.getElementById('log-body');
-    const empty = document.getElementById('empty-state');
-
-    if (rows.length === 0) {
-      tbody.innerHTML = '';
-      empty.style.display = 'flex';
-      document.getElementById('entry-count').textContent = '0 entries';
-      return;
-    }
+  function render() {
+    const txt = document.getElementById('f-txt').value.toLowerCase();
+    const rows = entries.filter(e => !txt || (e.msg||'').toLowerCase().includes(txt));
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty');
+    document.getElementById('count').textContent = rows.length + ' entries';
+    if (!rows.length) { tbody.innerHTML=''; empty.style.display='flex'; return; }
     empty.style.display = 'none';
-    document.getElementById('entry-count').textContent = `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
-
-    tbody.innerHTML = rows.map((e, i) => {
-      const sev = e.severity ?? 'info';
-      const sevUp = sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
+    tbody.innerHTML = rows.map((e,i) => {
+      const s   = normSev(e.severity);
       const ts  = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—';
-      const ctx = CTX_LABELS[e.context?.type] ?? e.context?.type ?? '—';
-      const host = e.context?.host ? ` · ${e.context.host}` : '';
-      const proc = e.context?.process ? ` · ${e.context.process}` : '';
-      const appId = e.context?.application_id ? ` · ${e.context.application_id}` : '';
-      const ctxId = e.context?.context_id ? `/${e.context.context_id}` : '';
-      const ctxStr = e.context?.type === 'AUTOSAR_DLT' ? ctx + appId + ctxId : ctx + host + proc;
-      const msg = escHtml(e.msg ?? JSON.stringify(e));
-      return `<tr data-idx="${i}">
-        <td class="sev sev-${sevUp.toUpperCase()}"><span class="sev-badge badge-${sevUp.toUpperCase()}">${sevUp}</span></td>
+      const ctx = fmtCtx(e.context);
+      return `<tr data-i="${i}">
+        <td><span class="badge b-${s}">${s}</span></td>
         <td class="ts">${ts}</td>
-        <td class="ctx">${escHtml(ctxStr)}</td>
-        <td class="msg">${msg}</td>
+        <td class="ctx">${esc(ctx)}</td>
+        <td class="msg">${esc(e.msg||'')}</td>
       </tr>`;
     }).join('');
-
-    tbody.querySelectorAll('tr').forEach(tr => {
-      tr.addEventListener('click', () => showDetail(rows[+tr.dataset.idx]));
-    });
+    tbody.querySelectorAll('tr').forEach(tr =>
+      tr.addEventListener('click', () => showDetail(rows[+tr.dataset.i]))
+    );
   }
 
-  // ── Fetch config ───────────────────────────────────────────────────
-  async function fetchConfig() {
+  // ── fetch config ────────────────────────────────────────────────────
+  async function loadConfig() {
     try {
-      const r = await fetch(CONFIG_URL);
+      const r = await fetch(`${API}/config`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      allConfig = data.contexts ?? [];
-      renderActiveConfig();
+      const d = await r.json();
+      config = d.contexts ?? [];
+      renderConfig();
     } catch {
-      document.getElementById('active-config').textContent = 'Unavailable';
+      document.getElementById('cur-cfg').textContent = 'Unavailable';
     }
   }
 
-  function renderActiveConfig() {
-    const ctxSel = document.getElementById('cfg-ctx-type').value;
-    const item   = allConfig.find(c => c.context?.type === ctxSel);
-    const el     = document.getElementById('active-config');
-    if (!item) {
-      el.textContent = 'No config for this context';
-      return;
-    }
-    const sev   = item.severity ?? 'info';
-    const sevUp = sev.charAt(0).toUpperCase() + sev.slice(1).toLowerCase();
-    el.innerHTML = `Current threshold: <span class="sev-badge badge-${sevUp.toUpperCase()}">${sevUp}</span>`;
-    // pre-select the severity dropdown to match current config
-    document.getElementById('cfg-severity').value = sev.toLowerCase();
+  function renderConfig() {
+    const ctx  = document.getElementById('cfg-ctx').value;
+    const item = config.find(c => c.context?.type === ctx);
+    const el   = document.getElementById('cur-cfg');
+    if (!item) { el.textContent = 'No config for this context'; return; }
+    const s = normSev(item.severity);
+    el.innerHTML = `Current: <span class="badge b-${s}">${s}</span>`;
+    document.getElementById('cfg-sev').value = s.toLowerCase();
   }
 
-  // ── Apply config ───────────────────────────────────────────────────
+  // ── apply config ────────────────────────────────────────────────────
   document.getElementById('btn-apply').addEventListener('click', async () => {
-    const ctxType = document.getElementById('cfg-ctx-type').value;
-    const sev     = document.getElementById('cfg-severity').value;
-
-    const body = {
-      items: [{
-        context: { type: ctxType },
-        severity: sev.toLowerCase()
-      }]
-    };
-
+    const ctx = document.getElementById('cfg-ctx').value;
+    const sev = document.getElementById('cfg-sev').value;
     try {
-      const r = await fetch(CONFIG_URL, {
+      const r = await fetch(`${API}/config`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ items: [{ context: { type: ctx }, severity: sev }] })
       });
-      if (r.status === 204 || r.ok) {
-        showConfigMsg('Config updated ✓', true);
-        currentCtxFilter = ctxType;  // filter log table to this context
-        fetchConfig();
-        fetchEntries();
+      if (r.ok || r.status === 204) {
+        msg('Config updated ✓', true);
+        await loadConfig();
+        await loadEntries();
       } else {
-        const err = await r.text();
-        showConfigMsg(`Error ${r.status}: ${err}`, false);
+        msg(`Error ${r.status}`, false);
       }
-    } catch (e) {
-      showConfigMsg(e.message, false);
-    }
+    } catch(e) { msg(e.message, false); }
   });
 
-  // ── Reset config ───────────────────────────────────────────────────
+  // ── reset config ────────────────────────────────────────────────────
   document.getElementById('btn-reset').addEventListener('click', async () => {
     try {
-      const r = await fetch(CONFIG_URL, { method: 'DELETE' });
-      if (r.status === 204 || r.ok) {
-        showConfigMsg('Config reset ✓', true);
-        // clear context filter so all entries show regardless of type
-        currentCtxFilter = null;
-        document.getElementById('filter-sev').value = '';
-        await fetchConfig();
-        await fetchEntries();
+      const r = await fetch(`${API}/config`, { method: 'DELETE' });
+      if (r.ok || r.status === 204) {
+        msg('Config reset ✓', true);
+        await loadConfig();
+        await loadEntries();
       } else {
-        showConfigMsg(`Error ${r.status}`, false);
+        msg(`Error ${r.status}`, false);
       }
-    } catch (e) {
-      showConfigMsg(e.message, false);
-    }
+    } catch(e) { msg(e.message, false); }
   });
 
-  // ── Auto-refresh ───────────────────────────────────────────────────
-  function startRefresh() {
-    stopRefresh();
-    refreshTimer = setInterval(fetchEntries, 3000);
-  }
-  function stopRefresh() {
-    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  // ── helpers ─────────────────────────────────────────────────────────
+  function normSev(s) {
+    if (!s) return 'INFO';
+    const u = s.toUpperCase().replace('DLT_','');
+    return ['FATAL','ERROR','WARN','INFO','DEBUG'].includes(u) ? u : 'INFO';
   }
 
-  // also re-render when context type selector changes
-  document.getElementById('cfg-ctx-type').addEventListener('change', () => {
-    currentCtxFilter = document.getElementById('cfg-ctx-type').value;
-    renderActiveConfig();
-    renderEntries();
-  });
-  document.getElementById('auto-refresh').addEventListener('change', e => {
-    e.target.checked ? startRefresh() : stopRefresh();
-  });
-  document.getElementById('btn-refresh').addEventListener('click', fetchEntries);
-  document.getElementById('filter-sev').addEventListener('change', fetchEntries);
-  document.getElementById('filter-text').addEventListener('input', renderEntries);
+  function fmtCtx(c) {
+    if (!c) return '—';
+    if (c.type === 'RFC5424')    return `RFC5424 · ${c.host||''} · ${c.process||''}`;
+    if (c.type === 'AUTOSAR_DLT') return `DLT · ${c.application_id||''}/${c.context_id||''}`;
+    return c.type || '—';
+  }
 
-  // ── Detail drawer ──────────────────────────────────────────────────
-  function showDetail(entry) {
-    document.getElementById('detail-content').textContent = JSON.stringify(entry, null, 2);
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function setDot(ok, txt) {
+    document.getElementById('dot').className = ok ? 'ok' : 'err';
+    document.getElementById('status').textContent = ok ? 'connected' : `error: ${txt}`;
+  }
+
+  function msg(text, ok) {
+    const el = document.getElementById('cfg-msg');
+    el.textContent = text;
+    el.className = ok ? 'ok' : 'err';
+    setTimeout(() => { el.className=''; el.style.display='none'; }, 3000);
+  }
+
+  function showDetail(e) {
+    document.getElementById('det-body').textContent = JSON.stringify(e, null, 2);
     document.getElementById('detail').classList.add('open');
   }
-  document.getElementById('detail-close').addEventListener('click', () => {
-    document.getElementById('detail').classList.remove('open');
-  });
+  document.getElementById('det-close').addEventListener('click', () =>
+    document.getElementById('detail').classList.remove('open')
+  );
 
-  // ── Status indicator ───────────────────────────────────────────────
-  function setStatus(ok, msg) {
-    const dot   = document.getElementById('status-dot');
-    const label = document.getElementById('status-label');
-    dot.className = 'status-dot' + (ok ? '' : ' error');
-    label.textContent = ok ? 'connected' : `error: ${msg}`;
-  }
+  // ── auto refresh ────────────────────────────────────────────────────
+  function startTimer() { timer = setInterval(loadEntries, 3000); }
+  function stopTimer()  { clearInterval(timer); }
 
-  // ── Helpers ────────────────────────────────────────────────────────
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-  function showConfigMsg(msg, ok) {
-    const el = document.getElementById('config-msg');
-    el.textContent = msg;
-    el.className = ok ? 'ok' : 'err';
-    setTimeout(() => { el.className = ''; el.style.display = 'none'; }, 3000);
-  }
+  document.getElementById('auto').addEventListener('change', e =>
+    e.target.checked ? startTimer() : stopTimer()
+  );
+  document.getElementById('btn-ref').addEventListener('click', loadEntries);
+  document.getElementById('f-sev').addEventListener('change', loadEntries);
+  document.getElementById('f-txt').addEventListener('input', render);
+  document.getElementById('cfg-ctx').addEventListener('change', renderConfig);
 
-  // ── Boot ───────────────────────────────────────────────────────────
-  fetchEntries();
-  fetchConfig();
-  startRefresh();
+  // ── boot ────────────────────────────────────────────────────────────
+  loadEntries();
+  loadConfig();
+  startTimer();
 </script>
 </body>
 </html>
