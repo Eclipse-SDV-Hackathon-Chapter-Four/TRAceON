@@ -136,10 +136,12 @@ See the repository for license details.
 
 ## Team member
 
-### Helge Gudmundsen - Developer
-### Isabella Lanes Rocha - Developer
-### Kavyasree Sankaranarayanan Nair - Developer
-### Marufa Binte Mostafa - Developer
-### Matheus Abrahao - Developer
-### Priyankkumar Bidya - Developer
-### Himank Meattle - Team Support
+| Name | Role |
+|------|-------------|
+| Helge Gudmundsen | Developer |
+| Isabella Lanes Rocha | Developer |
+| Kavyasree Sankaranarayanan Nair | Developer |
+| Marufa Binte Mostafa | Developer |
+| Matheus Abrahao | Developer |
+| Priyankkumar Bidya | Developer |
+| Himank Meattle | Team Support |
