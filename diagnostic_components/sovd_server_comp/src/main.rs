@@ -112,10 +112,10 @@ async fn main() -> std::io::Result<()> {
     info!("Log sink available at POST /internal/logs");
 
     // ------------------------------------------------------------------
-    // 2. Spawn UI server on port 8081 (plain Axum, bypasses opensovd fallback)
+    // 2. Spawn UI server on port 8082 (plain Axum, bypasses opensovd fallback)
     // ------------------------------------------------------------------
     let ui_listener = TcpListener::bind("0.0.0.0:8082").await?;
-    info!("UI available at http://127.0.0.1:8082/");
+    info!("UI available at http://0.0.0.0:8082/");
     let ui_router = Router::new()
         .route("/", get(serve_ui))
         .layer(CorsLayer::permissive());
@@ -127,7 +127,7 @@ async fn main() -> std::io::Result<()> {
     // 3. SOVD API server on port 8080
     // ------------------------------------------------------------------
     let api_listener = TcpListener::bind("0.0.0.0:8080").await?;
-    info!("SOVD API at http://127.0.0.1:8080/sovd/v1/");
+    info!("SOVD API at http://0.0.0.0:8080/sovd/v1/");
 
     Server::builder()
         .listener(api_listener)

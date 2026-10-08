@@ -22,44 +22,44 @@ TRAceON supports two log ingestion paths that can be selected at runtime.
 
 ### Path 1 — ThreadX / MQTT hardware ingest (default mode)
 
-A hardware ECU running **ThreadX RTOS** publishes log events over **MQTT**. An MQTT receptor
-bridges those events into the SOVD server via a REST sink. The server buffers entries in memory
-and broadcasts them to any active SSE stream.
+A hardware ECU running **ThreadX RTOS** publishes log events over **MQTT**. The telemetry
+server bridges those events into the SOVD server via a REST sink. The server buffers entries
+in memory and broadcasts them to any active SSE stream under app ID `hw-log`.
 
 ```text
-+------------------+   MQTT publish   +------------------+   POST /internal/logs
-|  ECU (ThreadX)   | ---------------> |  MQTT Receptor   | --------------------->+
-+------------------+                  +------------------+                        |
++------------------+  MQTT publish  +----------------------+  POST /internal/logs
+|  ECU (ThreadX)   | -------------> |  telemetry-server    | -------------------->+
+|  (ThreadX RTOS)  |                |  (Python, port 8083) |                      |
++------------------+                +----------------------+                      |
                                                                                    v
-+------------+   GET /sovd/v1/apps/diag-app/logs/entries   +--------------------+
-| Tester /   | <------------------------------------------ |  sovd_server_comp  |
-| Client     |   GET /sovd/v1/apps/diag-app/logs/entries   |  DiagLogProvider   |
-|  (UI/curl) |        /stream  (SSE live stream)           |  (in-memory ring   |
-+------------+ ----------------------------------------->  |   + broadcast)     |
-                                                            +--------------------+
++------------+  GET /sovd/v1/apps/hw-log/logs/entries      +--------------------+
+| Tester /   | <-----------------------------------------> |  sovd_server_comp  |
+| Client     |  GET /sovd/v1/apps/hw-log/logs/entries      |  app: hw-log       |
+|  (UI :8082 |       /stream  (SSE live stream)            |  DiagLogProvider   |
+|   /curl)   | <-----------------------------------------> |  (in-memory ring   |
++------------+                                             |   + broadcast)     |
+                                                           |  :8080 API         |
+                                                           |  :8082 UI          |
+                                                           +--------------------+
 ```
 
 ### Path 2 — uProtocol / Zenoh RPC
 
 A standalone ECU stand-in (`dummy_diag_app`) exposes a `getLogs` / `getConfig` RPC service
 over **uProtocol** using a **Zenoh** TCP transport. The SOVD server connects to it and
-delegates every `GET /entries` request to the ECU via RPC.
+delegates every `GET /entries` request to the ECU via RPC under app ID `diag-app`.
 
 ```text
-+------------+   GET /sovd/v1/apps/diag-app/logs/entries   +--------------------+
-| Tester /   | -----------------------------------------> |  sovd_server_comp  |
-| Client     | <------------------------------------------ |  UProtocolLog-     |
-+------------+           Filtered log entries              |  Provider          |
-                                                            +--------------------+
-                                                                     |
-                                                         uProtocol getLogs RPC
-                                                         UPAYLOAD_FORMAT_JSON
-                                                         (Zenoh TCP transport)
-                                                                     |
-                                                          +--------------------+
-                                                          |  dummy_diag_app    |
-                                                          |  (ECU stand-in)    |
-                                                          +--------------------+
++------------------+  uProtocol getLogs RPC (Zenoh TCP :7447)  +--------------------+
+|  dummy_diag_app  | <----------------------------------------> |  sovd_server_comp  |
+|  (ECU stand-in)  |                                            |  app: diag-app     |
++------------------+                                            |  UProtocolLog-     |
+                                                                |  Provider          |
++------------+  GET /sovd/v1/apps/diag-app/logs/entries        |                    |
+| Tester /   | <----------------------------------------->    |  :8080 API         |
+| Client     |  GET /sovd/v1/apps/diag-app/logs/entries        |  :8082 UI          |
+|  (UI/curl) |       /stream  (SSE live stream)                +--------------------+
++------------+
 ```
 
 See [docs/TraceON_UseCase.md](docs/TraceON_UseCase.md) for the full use-case description.
@@ -75,6 +75,14 @@ TRAceON/
 ├── docs/
 │   ├── TRAceON.png
 │   └── TraceON_UseCase.md
+├── scripts/
+│   ├── start-ui.sh                   # Start server + open browser (auto-detects WSL2 IP)
+│   ├── stream-logs.sh                # Open all 3 terminals in Windows Terminal tabs
+│   ├── terminal-1-sovd-server.sh     # Tab 1: build & run sovd_server_comp
+│   ├── terminal-2-telemetry.sh       # Tab 2: start MQTT telemetry receptor
+│   └── terminal-3-stream.sh          # Tab 3: enable forwarding + tail SSE stream
+├── LIVE-STREAM-SETUP.md              # End-to-end hardware stream setup guide
+├── UI-GUIDE.md                       # Log viewer UI reference
 └── open_source/
     └── opensovd-core/                # OpenSOVD core (git submodule)
 ```
@@ -101,11 +109,13 @@ TRAceON/
 
 ## Roadmap
 
-- Context-type filter on `GET /entries` (`?context-type=`).
-- Real DLT / journald log ingestion on the ECU side.
-- Continuous ECU health monitoring and alerting.
-- Multi-ECU topology (register one `App` per ECU in the SOVD topology).
-- OpenDUT integration for fleet deployment and test orchestration.
+| Item | Status |
+|---|---|
+| Server-side `?context-type=` filter on `GET /entries` (currently filtered client-side in the UI) | 🔜 Planned |
+| Real DLT / journald log ingestion on the ECU side | 🔜 Planned |
+| Continuous ECU health monitoring and alerting | 🔜 Planned |
+| Dynamic multi-ECU topology (register one `App` per ECU at runtime) | 🔜 Planned |
+| OpenDUT integration for fleet deployment and test orchestration | 🔜 Planned |
 
 ## Getting Started
 
@@ -136,17 +146,20 @@ cargo build
 
 ### Run — ThreadX/MQTT hardware ingest mode (default)
 
-The server starts with an empty ring buffer and waits for hardware events on
-`POST /internal/logs`. Seed entries are pre-loaded so the UI shows data immediately.
+The server binds two ports: the SOVD API on `8080` and the log viewer UI on `8082`.
+Seed entries are pre-loaded so the UI shows data immediately.
 
 ```bash
-# Serves on 0.0.0.0:8080
-# UI:    http://localhost:8080/ui/
-# API:   http://localhost:8080/sovd/v1/apps/diag-app/logs/entries
-# Sink:  POST http://localhost:8080/internal/logs
-SOVD_STATIC_DIR=diagnostic_components/sovd_server_comp/static \
-  cargo run -p sovd_server_comp
+# API:   http://<host>:8080/sovd/v1/apps/hw-log/logs/entries
+# UI:    http://<host>:8082/
+# Sink:  POST http://<host>:8080/internal/logs
+cargo run -p sovd_server_comp
 ```
+
+> **WSL2 note:** the UI's `const BASE` and `const APP` in
+> `diagnostic_components/sovd_server_comp/static/index.html` must point to the WSL2 IP
+> (e.g. `http://172.26.10.72:8080/sovd` and app `hw-log`). Find your IP with
+> `ip addr show eth0 | grep 'inet '`. Re-run `cargo build` after editing the file.
 
 Send a hardware log event to the sink:
 
@@ -156,21 +169,39 @@ curl -X POST http://localhost:8080/internal/logs \
   -d '{"timestamp":"2026-01-01T00:00:00Z","severity":"error","msg":"brake fault","context":{"type":"AUTOSAR_DLT","application_id":"BRK","context_id":"FAULT"}}'
 ```
 
-### Run — uProtocol/Zenoh two-process mode
-
-**Terminal 1 — ECU stand-in (listens on Zenoh TCP):**
+### Quick Start (WSL2 + Windows Terminal)
 
 ```bash
-APP_ZENOH_LISTEN=tcp/127.0.0.1:7447 cargo run -p dummy_diag_app
+# Start server and open browser automatically
+bash scripts/start-ui.sh
+
+# Or open all 3 terminals (server + telemetry + SSE stream) in separate tabs
+bash scripts/stream-logs.sh
+```
+
+See [LIVE-STREAM-SETUP.md](LIVE-STREAM-SETUP.md) for the full end-to-end hardware stream
+setup and [UI-GUIDE.md](UI-GUIDE.md) for the log viewer UI reference.
+
+### Run — uProtocol/Zenoh two-process mode
+
+uProtocol is **enabled by default**. Just run both processes — no extra env vars needed.
+
+**Terminal 1 — ECU stand-in (listens on Zenoh TCP `127.0.0.1:7447`):**
+
+```bash
+cargo run -p dummy_diag_app
 ```
 
 **Terminal 2 — SOVD server (connects to ECU over Zenoh):**
 
 ```bash
-TRACEON_LOG_SOURCE=uprotocol \
-APP_ZENOH_CONNECT=tcp/127.0.0.1:7447 \
-SOVD_STATIC_DIR=diagnostic_components/sovd_server_comp/static \
-  cargo run -p sovd_server_comp
+cargo run -p sovd_server_comp
+```
+
+To run **without** uProtocol (REST sink `hw-log` only, no `dummy_diag_app` needed):
+
+```bash
+TRACEON_UPROTOCOL=off cargo run -p sovd_server_comp
 ```
 
 ### Environment Variables
@@ -178,6 +209,10 @@ SOVD_STATIC_DIR=diagnostic_components/sovd_server_comp/static \
 | Variable | Component | Default | Description |
 |---|---|---|---|
 | `TRACEON_LOG_SOURCE` | `sovd_server_comp` | _(unset)_ | Set to `uprotocol` to fetch logs from the ECU over Zenoh; omit for ThreadX/MQTT REST sink mode |
+| `TRACEON_UPROTOCOL` | `sovd_server_comp` | `off` | Set to `on` to enable the uProtocol `diag-app` alongside the REST sink `hw-log` |
+| `TRACEON_MQTT_HOST` | `terminal-2-telemetry.sh` | _(unset)_ | IP of the MQTT broker (e.g. host Mac running Mosquitto) |
+| `TRACEON_HTTP_PORT` | `terminal-2-telemetry.sh` | `8083` | Port the telemetry receptor listens on |
+| `TRACEON_LOG_FORWARD_URL` | `terminal-2-telemetry.sh` | _(unset)_ | URL to forward log events to (e.g. `http://127.0.0.1:8080/internal/logs`) |
 | `APP_ZENOH_CONNECT` | `sovd_server_comp` | `tcp/127.0.0.1:7447` | Zenoh TCP endpoint of the ECU to connect to |
 | `APP_ZENOH_LISTEN` | `dummy_diag_app` | `tcp/127.0.0.1:7447` | Zenoh TCP endpoint the ECU listens on |
 | `SOVD_STATIC_DIR` | `sovd_server_comp` | `static` | Path to the directory containing `index.html` for the log viewer UI |
@@ -188,17 +223,29 @@ SOVD_STATIC_DIR=diagnostic_components/sovd_server_comp/static \
 All SOVD endpoints are versioned under `/sovd/v1`:
 
 ```
-GET    /sovd/v1/apps/diag-app/logs
-GET    /sovd/v1/apps/diag-app/logs/entries[?severity=warn&created-after=<iso8601>]
-GET    /sovd/v1/apps/diag-app/logs/entries/stream   (SSE live stream)
-GET    /sovd/v1/apps/diag-app/logs/config
-PUT    /sovd/v1/apps/diag-app/logs/config
-DELETE /sovd/v1/apps/diag-app/logs/config
+GET    /sovd/v1/apps/{app-id}/logs
+GET    /sovd/v1/apps/{app-id}/logs/entries[?severity=warn&created-after=<iso8601>&created-before=<iso8601>]
+GET    /sovd/v1/apps/{app-id}/logs/entries/stream   (SSE live stream)
+GET    /sovd/v1/apps/{app-id}/logs/config
+PUT    /sovd/v1/apps/{app-id}/logs/config
+DELETE /sovd/v1/apps/{app-id}/logs/config
 
 POST   /internal/logs   (hardware event ingest — ThreadX/MQTT receptor bridge)
 ```
 
-The live log viewer UI is served at `http://localhost:8080/ui/`.
+App IDs: `hw-log` (REST sink, default) · `diag-app` (uProtocol, requires `dummy_diag_app`)
+
+The live log viewer UI is served at `http://<host>:8082/`.
+
+## Scripts
+
+| Script | Description |
+|---|---|
+| `scripts/start-ui.sh` | Start SOVD server + auto-open browser with WSL2 IP |
+| `scripts/stream-logs.sh` | Launch all 3 terminals in Windows Terminal tabs |
+| `scripts/terminal-1-sovd-server.sh` | Build and run `sovd_server_comp` |
+| `scripts/terminal-2-telemetry.sh` | Start MQTT telemetry receptor |
+| `scripts/terminal-3-stream.sh` | Enable log forwarding + tail SSE stream |
 
 ## Scripts
 
