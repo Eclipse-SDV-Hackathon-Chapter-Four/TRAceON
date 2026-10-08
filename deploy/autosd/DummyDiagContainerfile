@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file was created with the assistance of generative AI.
+
+ARG AUTOSD_BASE_IMAGE=ghcr.io/eclipse-autosd/eclipse-autosd-bootc-qemu:latest
+
+FROM docker.io/library/rust:1-bookworm AS builder
+
+WORKDIR /workspace
+COPY . .
+RUN cargo build --release --package dummy_diag_app
+
+FROM ${AUTOSD_BASE_IMAGE}
+
+RUN dnf install -y ca-certificates \
+    && dnf clean all \
+    && useradd --system --create-home --shell /sbin/nologin traceon
+
+COPY --from=builder /workspace/target/release/dummy_diag_app /usr/local/bin/dummy_diag_app
+
+ENV APP_ZENOH_LISTEN=tcp/127.0.0.1:7447
+
+USER traceon
+EXPOSE 7447
+ENTRYPOINT ["/usr/local/bin/dummy_diag_app"]

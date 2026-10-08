@@ -6,3 +6,7 @@
 	path = TRAceON-ThreadX
 	url = git@github.com:Eclipse-SDV-Hackathon-Chapter-Four/TRAceON-ThreadX.git
 	branch = main
+[submodule "open_source/eclipse-autosd"]
+	path = open_source/eclipse-autosd
+	url = https://github.com/eclipse-autosd/eclipse-autosd.git
+	branch = main

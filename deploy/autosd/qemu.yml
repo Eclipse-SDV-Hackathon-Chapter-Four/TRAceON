@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file was created with the assistance of generative AI.
+
+apiVersion: jumpstarter.dev/v1alpha1
+kind: ExporterConfig
+
+metadata:
+  namespace: default
+  name: traceon-autosd-qemu
+
+# Direct mode is used for local QEMU testing; no controller is required.
+endpoint: ""
+token: ""
+
+export:
+  qemu:
+    type: jumpstarter_driver_qemu.driver.Qemu
+    config:
+      cpu: host
+      smp: 4
+      mem: "2G"
+      default_partitions:
+        OVMF_CODE.fd: /usr/share/OVMF/OVMF_CODE.fd
+        OVMF_VARS.fd: /usr/share/OVMF/OVMF_VARS.fd
+      hostfwd:
+        ssh:
+          hostport: 2222
+          guestport: 22
+        sovd:
+          hostport: 8080
+          guestport: 8080

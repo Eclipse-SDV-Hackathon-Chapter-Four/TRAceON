@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file was created with the assistance of generative AI.
+
+[Unit]
+Description=TRAceON OpenSOVD uProtocol logging server
+Wants=network-online.target dummy-diag-app.service
+After=network-online.target dummy-diag-app.service
+
+[Container]
+ContainerName=traceon-uprotocol
+Image=localhost/traceon:dev
+Network=host
+Environment=SOVD_LISTEN_ADDR=0.0.0.0:8080
+Environment=SOVD_STATIC_DIR=/opt/traceon/static
+Environment=TRACEON_LOG_SOURCE=uprotocol
+Environment=APP_ZENOH_CONNECT=tcp/127.0.0.1:7447
+EnvironmentFile=./traceon.env
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

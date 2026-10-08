@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file was created with the assistance of generative AI.
+
+ARG AUTOSD_BASE_IMAGE=ghcr.io/eclipse-autosd/eclipse-autosd-bootc-qemu:latest
+
+FROM docker.io/library/rust:1-bookworm AS builder
+
+WORKDIR /workspace
+COPY . .
+RUN cargo build --release --package sovd_server_comp
+
+FROM ${AUTOSD_BASE_IMAGE}
+
+RUN dnf install -y ca-certificates \
+    && dnf clean all \
+    && useradd --system --create-home --shell /sbin/nologin traceon
+
+WORKDIR /opt/traceon
+COPY --from=builder /workspace/target/release/sovd_server_comp /usr/local/bin/sovd_server_comp
+COPY --from=builder /workspace/diagnostic_components/sovd_server_comp/static /opt/traceon/static
+
+ENV SOVD_LISTEN_ADDR=0.0.0.0:8080
+ENV SOVD_STATIC_DIR=/opt/traceon/static
+ENV TRACEON_LOG_SOURCE=rest
+
+USER traceon
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/sovd_server_comp"]
