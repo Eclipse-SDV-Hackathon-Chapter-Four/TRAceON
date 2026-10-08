@@ -91,12 +91,20 @@
       </select>
 
       <label>After</label>
-      <input type="time" id="filter-after" step="1" />
+      <select id="after-h"><option value="">HH</option></select>
+      <span style="color:var(--muted);font-size:13px">:</span>
+      <select id="after-m"><option value="">MM</option></select>
+      <span style="color:var(--muted);font-size:13px">:</span>
+      <select id="after-s"><option value="">SS</option></select>
 
       <label>Before</label>
-      <input type="time" id="filter-before" step="1" />
+      <select id="before-h"><option value="">HH</option></select>
+      <span style="color:var(--muted);font-size:13px">:</span>
+      <select id="before-m"><option value="">MM</option></select>
+      <span style="color:var(--muted);font-size:13px">:</span>
+      <select id="before-s"><option value="">SS</option></select>
 
-      <button class="secondary" id="btn-clear-time">✕ Clear</button>
+      <button class="sec" id="btn-clear-time">✕ Clear</button>
 
       <label>Search</label>
       <input id="f-txt" placeholder="message…" style="width:140px"/>
@@ -163,12 +171,8 @@
   // ── fetch entries ───────────────────────────────────────────────────
   async function fetchEntries() {
     const sev    = document.getElementById('f-sev').value;
-    const after  = document.getElementById('filter-after').value;
-    const before = document.getElementById('filter-before').value;
     const params = new URLSearchParams();
-    if (sev)    params.set('severity',       sev.toLowerCase());
-    if (after)  params.set('created-after',  toISO(after));
-    if (before) params.set('created-before', toISO(before));
+    if (sev) params.set('severity', sev.toLowerCase());
     const url = params.size ? `${ENTRIES_URL}?${params}` : ENTRIES_URL;
     try {
       const r = await fetch(url);
@@ -184,8 +188,20 @@
   }
 
   function render() {
-    const txt  = document.getElementById('f-txt').value.toLowerCase();
-    const rows = entries.filter(e => !txt || (e.msg||'').toLowerCase().includes(txt));
+    const txt = document.getElementById('f-txt').value.toLowerCase();
+
+    const rows = entries.filter(e => {
+      if (txt && !(e.msg||'').toLowerCase().includes(txt)) return false;
+      if (e.timestamp) {
+        const t    = new Date(e.timestamp);
+        const secs = t.getUTCHours() * 3600 + t.getUTCMinutes() * 60 + t.getUTCSeconds();
+        const after  = getTimeSecs('after');
+        const before = getTimeSecs('before');
+        if (after  !== null && secs < after)  return false;
+        if (before !== null && secs > before) return false;
+      }
+      return true;
+    });
     const tbody = document.getElementById('tbody');
     const empty = document.getElementById('empty');
     document.getElementById('count').textContent = rows.length + ' entries';
@@ -193,7 +209,7 @@
     empty.style.display = 'none';
     tbody.innerHTML = rows.map((e,i) => {
       const s  = normSev(e.severity);
-      const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—';
+      const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString('en-GB', {timeZone:'UTC', hour:'2-digit', minute:'2-digit', second:'2-digit'}) + ' UTC' : '—';
       const ctx = fmtCtx(e.context);
       return `<tr data-i="${i}">
         <td><span class="badge b-${s}">${s}</span></td>
@@ -257,12 +273,14 @@
   document.getElementById('cfg-ctx').addEventListener('change', renderConfig);
   document.getElementById('f-sev').addEventListener('change', fetchEntries);
   document.getElementById('f-txt').addEventListener('input', render);
-  document.getElementById('filter-after').addEventListener('change', fetchEntries);
-  document.getElementById('filter-before').addEventListener('change', fetchEntries);
+  ['after-h','after-m','after-s','before-h','before-m','before-s'].forEach(id =>
+    document.getElementById(id).addEventListener('change', render)
+  );
   document.getElementById('btn-clear-time').addEventListener('click', () => {
-    document.getElementById('filter-after').value = '';
-    document.getElementById('filter-before').value = '';
-    fetchEntries();
+    ['after-h','after-m','after-s','before-h','before-m','before-s'].forEach(id =>
+      document.getElementById(id).value = ''
+    );
+    render();
   });
   document.getElementById('btn-ref').addEventListener('click', fetchEntries);
   document.getElementById('auto').addEventListener('change', e => {
@@ -285,11 +303,24 @@
     return `${c.type||''}${c.host ? ' · '+c.host : ''}${c.process ? ' · '+c.process : ''}`;
   }
 
-  function toISO(t) {
-    const d = new Date();
-    const [h,m,s] = t.split(':');
-    d.setHours(+h, +m, +(s||0), 0);
-    return d.toISOString();
+  // ── populate time dropdowns (24h UTC) ─────────────────────────────────
+  ['after-h','before-h'].forEach(id => {
+    const el = document.getElementById(id);
+    for (let h = 0; h < 24; h++)
+      el.innerHTML += `<option value="${h}">${String(h).padStart(2,'0')}</option>`;
+  });
+  ['after-m','before-m','after-s','before-s'].forEach(id => {
+    const el = document.getElementById(id);
+    for (let v = 0; v < 60; v++)
+      el.innerHTML += `<option value="${v}">${String(v).padStart(2,'0')}</option>`;
+  });
+
+  function getTimeSecs(prefix) {
+    const h = document.getElementById(`${prefix}-h`).value;
+    const m = document.getElementById(`${prefix}-m`).value;
+    const s = document.getElementById(`${prefix}-s`).value;
+    if (h === '') return null;  // hour must be set; m and s default to 0
+    return +h * 3600 + (+m||0) * 60 + (+s||0);
   }
 
   function esc(s) {
