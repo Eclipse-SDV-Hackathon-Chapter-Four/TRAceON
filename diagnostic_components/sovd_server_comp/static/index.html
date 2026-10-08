@@ -89,6 +89,15 @@
         <option value="info">Info</option>
         <option value="debug">Debug</option>
       </select>
+
+      <label>After</label>
+      <input type="time" id="filter-after" step="1" />
+
+      <label>Before</label>
+      <input type="time" id="filter-before" step="1" />
+
+      <button class="secondary" id="btn-clear-time">✕ Clear</button>
+
       <label>Search</label>
       <input id="f-txt" placeholder="message…" style="width:140px"/>
       <div class="spacer"></div>
@@ -142,17 +151,25 @@
 </div>
 
 <script>
-  // ── API base — SOVD server is on port 8080 ──────────────────────────
-  const API = 'http://172.26.10.72:8080/sovd/v1/apps/diag-app/logs';
+  const BASE = 'http://172.26.10.72:8080/sovd';
+  const APP  = 'hw-log';
+  const ENTRIES_URL = `${BASE}/v1/apps/${APP}/logs/entries`;
+  const CONFIG_URL  = `${BASE}/v1/apps/${APP}/logs/config`;
 
   let entries = [];
   let config  = [];
   let timer   = null;
 
   // ── fetch entries ───────────────────────────────────────────────────
-  async function loadEntries() {
-    const sev = document.getElementById('f-sev').value;
-    const url = sev ? `${API}/entries?severity=${sev}` : `${API}/entries`;
+  async function fetchEntries() {
+    const sev    = document.getElementById('f-sev').value;
+    const after  = document.getElementById('filter-after').value;
+    const before = document.getElementById('filter-before').value;
+    const params = new URLSearchParams();
+    if (sev)    params.set('severity',       sev.toLowerCase());
+    if (after)  params.set('created-after',  toISO(after));
+    if (before) params.set('created-before', toISO(before));
+    const url = params.size ? `${ENTRIES_URL}?${params}` : ENTRIES_URL;
     try {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -167,7 +184,7 @@
   }
 
   function render() {
-    const txt = document.getElementById('f-txt').value.toLowerCase();
+    const txt  = document.getElementById('f-txt').value.toLowerCase();
     const rows = entries.filter(e => !txt || (e.msg||'').toLowerCase().includes(txt));
     const tbody = document.getElementById('tbody');
     const empty = document.getElementById('empty');
@@ -175,8 +192,8 @@
     if (!rows.length) { tbody.innerHTML=''; empty.style.display='flex'; return; }
     empty.style.display = 'none';
     tbody.innerHTML = rows.map((e,i) => {
-      const s   = normSev(e.severity);
-      const ts  = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—';
+      const s  = normSev(e.severity);
+      const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—';
       const ctx = fmtCtx(e.context);
       return `<tr data-i="${i}">
         <td><span class="badge b-${s}">${s}</span></td>
@@ -191,9 +208,9 @@
   }
 
   // ── fetch config ────────────────────────────────────────────────────
-  async function loadConfig() {
+  async function fetchConfig() {
     try {
-      const r = await fetch(`${API}/config`);
+      const r = await fetch(CONFIG_URL);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       config = d.contexts ?? [];
@@ -213,39 +230,47 @@
     document.getElementById('cfg-sev').value = s.toLowerCase();
   }
 
-  // ── apply config ────────────────────────────────────────────────────
+  // ── apply / reset config ────────────────────────────────────────────
   document.getElementById('btn-apply').addEventListener('click', async () => {
     const ctx = document.getElementById('cfg-ctx').value;
     const sev = document.getElementById('cfg-sev').value;
     try {
-      const r = await fetch(`${API}/config`, {
+      const r = await fetch(CONFIG_URL, {
         method: 'PUT',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ items: [{ context: { type: ctx }, severity: sev }] })
       });
-      if (r.ok || r.status === 204) {
-        msg('Config updated ✓', true);
-        await loadConfig();
-        await loadEntries();
-      } else {
-        msg(`Error ${r.status}`, false);
-      }
-    } catch(e) { msg(e.message, false); }
+      if (r.ok || r.status === 204) { cfgMsg('Config updated ✓', true); await fetchConfig(); await fetchEntries(); }
+      else cfgMsg(`Error ${r.status}`, false);
+    } catch(e) { cfgMsg(e.message, false); }
   });
 
-  // ── reset config ────────────────────────────────────────────────────
   document.getElementById('btn-reset').addEventListener('click', async () => {
     try {
-      const r = await fetch(`${API}/config`, { method: 'DELETE' });
-      if (r.ok || r.status === 204) {
-        msg('Config reset ✓', true);
-        await loadConfig();
-        await loadEntries();
-      } else {
-        msg(`Error ${r.status}`, false);
-      }
-    } catch(e) { msg(e.message, false); }
+      const r = await fetch(CONFIG_URL, { method: 'DELETE' });
+      if (r.ok || r.status === 204) { cfgMsg('Config reset ✓', true); await fetchConfig(); await fetchEntries(); }
+      else cfgMsg(`Error ${r.status}`, false);
+    } catch(e) { cfgMsg(e.message, false); }
   });
+
+  // ── event listeners ─────────────────────────────────────────────────
+  document.getElementById('cfg-ctx').addEventListener('change', renderConfig);
+  document.getElementById('f-sev').addEventListener('change', fetchEntries);
+  document.getElementById('f-txt').addEventListener('input', render);
+  document.getElementById('filter-after').addEventListener('change', fetchEntries);
+  document.getElementById('filter-before').addEventListener('change', fetchEntries);
+  document.getElementById('btn-clear-time').addEventListener('click', () => {
+    document.getElementById('filter-after').value = '';
+    document.getElementById('filter-before').value = '';
+    fetchEntries();
+  });
+  document.getElementById('btn-ref').addEventListener('click', fetchEntries);
+  document.getElementById('auto').addEventListener('change', e => {
+    e.target.checked ? startTimer() : stopTimer();
+  });
+  document.getElementById('det-close').addEventListener('click', () =>
+    document.getElementById('detail').classList.remove('open')
+  );
 
   // ── helpers ─────────────────────────────────────────────────────────
   function normSev(s) {
@@ -256,9 +281,15 @@
 
   function fmtCtx(c) {
     if (!c) return '—';
-    if (c.type === 'RFC5424')    return `RFC5424 · ${c.host||''} · ${c.process||''}`;
     if (c.type === 'AUTOSAR_DLT') return `DLT · ${c.application_id||''}/${c.context_id||''}`;
-    return c.type || '—';
+    return `${c.type||''}${c.host ? ' · '+c.host : ''}${c.process ? ' · '+c.process : ''}`;
+  }
+
+  function toISO(t) {
+    const d = new Date();
+    const [h,m,s] = t.split(':');
+    d.setHours(+h, +m, +(s||0), 0);
+    return d.toISOString();
   }
 
   function esc(s) {
@@ -270,7 +301,7 @@
     document.getElementById('status').textContent = ok ? 'connected' : `error: ${txt}`;
   }
 
-  function msg(text, ok) {
+  function cfgMsg(text, ok) {
     const el = document.getElementById('cfg-msg');
     el.textContent = text;
     el.className = ok ? 'ok' : 'err';
@@ -281,25 +312,13 @@
     document.getElementById('det-body').textContent = JSON.stringify(e, null, 2);
     document.getElementById('detail').classList.add('open');
   }
-  document.getElementById('det-close').addEventListener('click', () =>
-    document.getElementById('detail').classList.remove('open')
-  );
 
-  // ── auto refresh ────────────────────────────────────────────────────
-  function startTimer() { timer = setInterval(loadEntries, 3000); }
+  function startTimer() { timer = setInterval(fetchEntries, 3000); }
   function stopTimer()  { clearInterval(timer); }
 
-  document.getElementById('auto').addEventListener('change', e =>
-    e.target.checked ? startTimer() : stopTimer()
-  );
-  document.getElementById('btn-ref').addEventListener('click', loadEntries);
-  document.getElementById('f-sev').addEventListener('change', loadEntries);
-  document.getElementById('f-txt').addEventListener('input', render);
-  document.getElementById('cfg-ctx').addEventListener('change', renderConfig);
-
   // ── boot ────────────────────────────────────────────────────────────
-  loadEntries();
-  loadConfig();
+  fetchEntries();
+  fetchConfig();
   startTimer();
 </script>
 </body>

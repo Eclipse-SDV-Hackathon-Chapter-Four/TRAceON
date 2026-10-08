@@ -247,6 +247,30 @@ The live log viewer UI is served at `http://<host>:8082/`.
 | `scripts/terminal-2-telemetry.sh` | Start MQTT telemetry receptor |
 | `scripts/terminal-3-stream.sh` | Enable log forwarding + tail SSE stream |
 
+## Scripts
+
+All scripts are in the `scripts/` directory. Make them executable once with `chmod +x scripts/*.sh`.
+
+| Script | Description |
+|---|---|
+| `start-ui.sh` | Starts `sovd_server_comp` in a new terminal tab and automatically opens the log viewer UI in the browser |
+| `stream-logs.sh [severity]` | Full live streaming pipeline — opens 3 terminal tabs: SOVD server, telemetry server (MQTT→forward), and live SSE stream |
+| `terminal-1-sovd-server.sh` | Starts the SOVD server on port 8080 (UI on 8082) |
+| `terminal-2-telemetry.sh` | Clones TRAceON-ThreadX (if needed), sets up Python venv, starts the telemetry server on port 8083 |
+| `terminal-3-stream.sh [severity]` | Enables log forwarding and tails the live SSE stream |
+
+**Quick start — UI only:**
+```bash
+./scripts/start-ui.sh
+```
+
+**Quick start — full live stream from ThreadX ECU:**
+```bash
+./scripts/stream-logs.sh DLT_ERROR
+```
+
+See [LIVE-STREAM-SETUP.md](LIVE-STREAM-SETUP.md) and [UI-GUIDE.md](UI-GUIDE.md) for detailed instructions.
+
 ## Contributing
 
 This project is intended to be contributed back to OpenSOVD. Contributions are welcome —

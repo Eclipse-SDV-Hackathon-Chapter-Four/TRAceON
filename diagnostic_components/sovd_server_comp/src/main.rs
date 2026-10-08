@@ -72,7 +72,6 @@ async fn main() -> std::io::Result<()> {
     // ------------------------------------------------------------------
     let topology = Topology::new();
 
-    // Source B: REST sink + live SSE stream, exposed as app "hw-log".
     let sink_provider = DiagLogProvider::new();
     let sink = Router::new()
         .route("/logs", post(ingest_log))
@@ -80,17 +79,8 @@ async fn main() -> std::io::Result<()> {
 
     {
         let mut t = topology.write().await;
-        t.add_component(Component::new("diag-ecu", "Diagnostic ECU"));
-
-        let app = App::new("diag-app", "Diagnostic Application").with_component_id("diag-ecu");
-        let log_source = std::env::var("TRACEON_LOG_SOURCE").unwrap_or_default();
-        let app = if log_source == "uprotocol" {
-            info!("Log source: uProtocol getLogs RPC");
 
         // ---- App "diag-app" on component "diag-ecu": uProtocol/Zenoh ECU ----
-        //
-        // Registered by default; set TRACEON_UPROTOCOL=off to skip it (useful
-        // when the dummy ECU process is not running).
         let uprotocol_enabled =
             std::env::var("TRACEON_UPROTOCOL").unwrap_or_default() != "off";
         if uprotocol_enabled {
@@ -105,13 +95,6 @@ async fn main() -> std::io::Result<()> {
                     .with_log_provider(provider),
             );
         } else {
-            info!("Log source: REST log sink");
-            app.with_log_provider(log_provider)
-        };
-        t.add_app(app);
-    }
-
-    info!("Topology ready: component=diag-ecu  app=diag-app");
             info!("Source A (diag-app): disabled (TRACEON_UPROTOCOL=off)");
         }
 
@@ -129,25 +112,22 @@ async fn main() -> std::io::Result<()> {
     info!("Log sink available at POST /internal/logs");
 
     // ------------------------------------------------------------------
-    // 2. Spawn UI server on port 8081 (plain Axum, no opensovd fallback)
+    // 2. Spawn UI server on port 8082 (plain Axum, bypasses opensovd fallback)
     // ------------------------------------------------------------------
-    let ui_listener = TcpListener::bind("0.0.0.0:8081").await?;
-    info!("UI available at http://127.0.0.1:8081/");
+    let ui_listener = TcpListener::bind("0.0.0.0:8082").await?;
+    info!("UI available at http://0.0.0.0:8082/");
     let ui_router = Router::new()
         .route("/", get(serve_ui))
         .layer(CorsLayer::permissive());
     tokio::spawn(async move {
         axum::serve(ui_listener, ui_router).await.ok();
     });
-    // Bind to loopback: this is a self-contained demo, not a production server.
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
-    info!("Binding on {}", listener.local_addr()?);
 
     // ------------------------------------------------------------------
     // 3. SOVD API server on port 8080
     // ------------------------------------------------------------------
     let api_listener = TcpListener::bind("0.0.0.0:8080").await?;
-    info!("SOVD API at http://127.0.0.1:8080/sovd/v1/");
+    info!("SOVD API at http://0.0.0.0:8080/sovd/v1/");
 
     Server::builder()
         .listener(api_listener)
