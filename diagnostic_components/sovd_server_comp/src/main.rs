@@ -126,12 +126,17 @@ async fn main() -> std::io::Result<()> {
     // ------------------------------------------------------------------
     // 3. SOVD API server on port 8080
     // ------------------------------------------------------------------
-    let api_listener = TcpListener::bind("0.0.0.0:8080").await?;
-    info!("SOVD API at http://0.0.0.0:8080/sovd/v1/");
+    let listen_addr =
+        std::env::var("SOVD_LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    let api_listener = TcpListener::bind(&listen_addr).await?;
+    info!("SOVD API at http://{listen_addr}/sovd/v1/");
+
+    let base_uri =
+        std::env::var("SOVD_BASE_URI").unwrap_or_else(|_| "http://127.0.0.1:8080/sovd".to_string());
 
     Server::builder()
         .listener(api_listener)
-        .base_uri("http://127.0.0.1:8080/sovd")
+        .base_uri(&base_uri)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))?
         .service("/internal", sink)
         .topology(topology)

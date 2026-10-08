@@ -9,3 +9,6 @@
 .pytest_cache/
 **/.pytest_cache/
 report.html
+
+# Local AutoSD disk images
+/.cache/autosd/

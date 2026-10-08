@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file was created with the assistance of generative AI.
+
+[Unit]
+Description=TRAceON dummy ECU uProtocol log service
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=traceon-dummy-diag-app
+Image=localhost/traceon-dummy-diag-app:dev
+Network=host
+Environment=APP_ZENOH_LISTEN=tcp/127.0.0.1:7447
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

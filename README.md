@@ -81,9 +81,11 @@ TRAceON/
 │   ├── terminal-1-sovd-server.sh     # Tab 1: build & run sovd_server_comp
 │   ├── terminal-2-telemetry.sh       # Tab 2: start MQTT telemetry receptor
 │   └── terminal-3-stream.sh          # Tab 3: enable forwarding + tail SSE stream
+├── deploy/autosd/                     # AutoSD images, Quadlets, and deployment
 ├── LIVE-STREAM-SETUP.md              # End-to-end hardware stream setup guide
 ├── UI-GUIDE.md                       # Log viewer UI reference
 └── open_source/
+    ├── eclipse-autosd/               # Eclipse AutoSD source (git submodule)
     └── opensovd-core/                # OpenSOVD core (git submodule)
 ```
 
@@ -103,6 +105,13 @@ TRAceON/
 - **uProtocol/Zenoh transport** — `getLogs`, `getConfig`, `configure`, `resetConfig` RPCs
   carried as `UPAYLOAD_FORMAT_JSON` over a Zenoh TCP peer connection.
 - **Two-process uProtocol demo** — `sovd_server_comp` (HPC) + `dummy_diag_app` (ECU)
+
+## AutoSD deployment
+
+The AutoSD source is pinned as the `open_source/eclipse-autosd` submodule. The
+TraceOn SOVD server and dummy ECU can be deployed into a running AutoSD image
+with the Quadlets and automated test described in
+[deploy/autosd/README.md](deploy/autosd/README.md).
   run as separate OS processes connected by Zenoh.
 - **Live log viewer UI** — served at `/ui/`; context-aware filtering, per-context severity
   config panel, auto-refresh, SSE live mode.
